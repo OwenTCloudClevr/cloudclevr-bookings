@@ -207,6 +207,17 @@
   .view-picker{font-family:inherit;font-size:12.5px;font-weight:600;padding:6px 26px 6px 11px;border-radius:8px;border:1px solid rgba(0,0,0,.22);background:#fff;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%23111' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
   .o2o-readonly{opacity:.65;pointer-events:none}
   .ro-banner{background:#FBEFD6;border:1px solid #EAD9AE;color:#7A5A12;padding:9px 13px;border-radius:9px;font-size:12.5px;font-weight:600;margin-bottom:14px}
+  .th-sort{cursor:pointer;user-select:none}
+  .th-sort:hover{color:var(--ink)}
+  .sort-dim{opacity:.32}
+  .pager{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-top:1px solid var(--line-2);flex-wrap:wrap}
+  .pager-info{font-size:12.5px;color:var(--muted);font-weight:600}
+  .pager-ctrls{display:flex;gap:5px;align-items:center}
+  .pager-btn{min-width:30px;height:30px;padding:0 8px;border:1px solid var(--line);background:#fff;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
+  .pager-btn:hover:not(:disabled):not(.active){background:var(--grey)}
+  .pager-btn.active{background:var(--green-deep);color:#fff;border-color:var(--green-deep)}
+  .pager-btn:disabled{opacity:.4;cursor:default}
+  .pager-gap{color:var(--muted);padding:0 2px}
 
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--black);color:#fff;padding:12px 18px;border-radius:11px;font-size:13.5px;font-weight:600;box-shadow:0 12px 30px rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:.2s;z-index:90;display:flex;align-items:center;gap:9px}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}.toast .tick{color:var(--green)}
@@ -289,6 +300,7 @@
 
     <div class="table-card">
       <div class="table-scroll"><table id="bookings-table"><thead><tr id="thead-row"></tr></thead><tbody id="tbody"></tbody></table></div>
+      <div id="pager" class="pager"></div>
       <div id="empty-host"></div>
     </div>
   </section>
@@ -450,6 +462,7 @@ const STORE_KEY="cloudclevr_bookings_v2",COLS_KEY="cloudclevr_cols_v2";
 /* ---------- State ---------- */
 let editingId=null,selected={};PILLAR_KEYS.forEach(k=>selected[k]=false);
 let filterStatus="all",filterMM="all",filterBM="all",visibleCols={};
+let page=1,sortKey="meeting",sortDir="asc";const PAGE_SIZE=10;
 
 /* ---------- Helpers ---------- */
 const $=(s,r=document)=>r.querySelector(s);
@@ -507,7 +520,20 @@ function handleSave(){const missing=!getVal("companyName")||!getVal("contactName
 /* ---------- Filters ---------- */
 function rebuildFilters(){const list=load();$("#f-status").innerHTML='<option value="all">All statuses</option>'+STATUSES.map(s=>'<option'+(filterStatus===s?' selected':'')+'>'+esc(s)+'</option>').join("");const mm=new Set(),bm=new Set();list.forEach(r=>{const a=monthKey(r.meetingDate);if(a)mm.add(a);const b=monthKey(r.dateBooked);if(b)bm.add(b)});const mma=[...mm].sort().reverse(),bma=[...bm].sort().reverse();$("#f-mmonth").innerHTML='<option value="all">All meeting months</option>'+mma.map(k=>'<option value="'+k+'"'+(filterMM===k?' selected':'')+'>'+monthLabel(k)+'</option>').join("");$("#f-bmonth").innerHTML='<option value="all">All booked months</option>'+bma.map(k=>'<option value="'+k+'"'+(filterBM===k?' selected':'')+'>'+monthLabel(k)+'</option>').join("");updateFilterBadge()}
 function updateFilterBadge(){const n=(filterStatus!=="all")+(filterMM!=="all")+(filterBM!=="all");const b=$("#filter-badge");b.style.display=n?"grid":"none";b.textContent=n;$("#filter-btn").classList.toggle("active-f",!!n)}
-function getFiltered(){const q=$("#search").value.trim().toLowerCase();let list=scopedBookings();if(filterStatus!=="all")list=list.filter(r=>(r.status||"Scheduled")===filterStatus);if(filterMM!=="all")list=list.filter(r=>monthKey(r.meetingDate)===filterMM);if(filterBM!=="all")list=list.filter(r=>monthKey(r.dateBooked)===filterBM);if(q)list=list.filter(r=>[r.companyName,r.contactName,r.accountManager,r.phone,r.bde].some(v=>(v||"").toLowerCase().includes(q)));list.sort((a,b)=>{const da=a.meetingDate?new Date(a.meetingDate).getTime():Infinity,db=b.meetingDate?new Date(b.meetingDate).getTime():Infinity;return da-db});return list}
+function sortVal(r,key){switch(key){
+  case"company":return (r.companyName||"").toLowerCase();
+  case"contact":return (r.contactName||"").toLowerCase();
+  case"phone":return (r.phone||"").toLowerCase();
+  case"dateBooked":return r.dateBooked?new Date(r.dateBooked).getTime():-Infinity;
+  case"meeting":return r.meetingDate?new Date(r.meetingDate).getTime():Infinity;
+  case"type":return (r.meetingType||"").toLowerCase();
+  case"am":return (r.accountManager||"").toLowerCase();
+  case"bde":return (r.bde||"").toLowerCase();
+  case"status":return STATUSES.indexOf(r.status||"Scheduled");
+  case"outlook":return r.outlook?1:0;
+  case"opportunityValue":return Number(r.opportunityValue)||0;
+  default:return 0}}
+function getFiltered(){const q=$("#search").value.trim().toLowerCase();let list=scopedBookings();if(filterStatus!=="all")list=list.filter(r=>(r.status||"Scheduled")===filterStatus);if(filterMM!=="all")list=list.filter(r=>monthKey(r.meetingDate)===filterMM);if(filterBM!=="all")list=list.filter(r=>monthKey(r.dateBooked)===filterBM);if(q)list=list.filter(r=>[r.companyName,r.contactName,r.accountManager,r.phone,r.bde].some(v=>(v||"").toLowerCase().includes(q)));const dir=sortDir==="asc"?1:-1;list.sort((a,b)=>{const va=sortVal(a,sortKey),vb=sortVal(b,sortKey);if(va<vb)return -dir;if(va>vb)return dir;return 0});return list}
 
 /* ---------- Columns ---------- */
 function buildColMenu(){const m=$("#col-menu");m.innerHTML=COLS.filter(c=>!c.always).map(c=>'<label><input type="checkbox" data-col="'+c.key+'"'+(visibleCols[c.key]?' checked':'')+'>'+esc(c.label)+'</label>').join("");$$("input[data-col]",m).forEach(cb=>cb.addEventListener("change",()=>{visibleCols[cb.dataset.col]=cb.checked;persistCols();renderTable()}))}
@@ -537,12 +563,25 @@ function cellFor(key,r){switch(key){
   default:return ""}}
 
 /* ---------- Table ---------- */
+const SORTABLE_COLS={company:1,contact:1,phone:1,dateBooked:1,meeting:1,type:1,am:1,bde:1,status:1,outlook:1,opportunityValue:1};
 function renderTable(){
-  const cols=visibleColsList();$("#thead-row").innerHTML=cols.map(c=>'<th style="width:'+(COLW[c.key]||110)+'px">'+esc(c.label)+'</th>').join("");
-  const list=getFiltered(),tbody=$("#tbody"),emptyHost=$("#empty-host");
-  if(!list.length){tbody.innerHTML="";const total=scopedBookings().length;$("#bookings-table").style.display="none";emptyHost.innerHTML='<div class="empty"><div class="ico">'+svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',22).replace('stroke="currentColor"','stroke="#2FA221"')+'</div><h3>'+(total===0?"No bookings yet":"No matches")+'</h3><p>'+(total===0?"Booked a meeting on a call? Hit New booking to log it.":"Try a different search or filter.")+'</p>'+(total===0?'<button class="btn btn-primary" onclick="openModal()">New booking</button>':'')+'</div>';return}
+  const cols=visibleColsList();
+  $("#thead-row").innerHTML=cols.map(c=>{const sortable=SORTABLE_COLS[c.key],active=sortKey===c.key,arrow=active?(sortDir==="asc"?' ▲':' ▼'):(sortable?' <span class="sort-dim">↕</span>':'');return '<th style="width:'+(COLW[c.key]||110)+'px"'+(sortable?' class="th-sort" data-sort="'+c.key+'"':'')+'>'+esc(c.label)+arrow+'</th>'}).join("");
+  const list=getFiltered(),tbody=$("#tbody"),emptyHost=$("#empty-host"),pager=$("#pager");
+  if(!list.length){tbody.innerHTML="";pager.innerHTML="";const total=scopedBookings().length;$("#bookings-table").style.display="none";emptyHost.innerHTML='<div class="empty"><div class="ico">'+svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',22).replace('stroke="currentColor"','stroke="#2FA221"')+'</div><h3>'+(total===0?"No bookings yet":"No matches")+'</h3><p>'+(total===0?"Booked a meeting on a call? Hit New booking to log it.":"Try a different search or filter.")+'</p>'+(total===0?'<button class="btn btn-primary" onclick="openModal()">New booking</button>':'')+'</div>';return}
   $("#bookings-table").style.display="";emptyHost.innerHTML="";
-  tbody.innerHTML=list.map(r=>'<tr id="row-'+r.id+'">'+cols.map(c=>'<td>'+cellFor(c.key,r)+'</td>').join("")+'</tr>').join("");
+  const pages=Math.max(1,Math.ceil(list.length/PAGE_SIZE));if(page>pages)page=pages;if(page<1)page=1;
+  const startIdx=(page-1)*PAGE_SIZE,slice=list.slice(startIdx,startIdx+PAGE_SIZE);
+  tbody.innerHTML=slice.map(r=>'<tr id="row-'+r.id+'">'+cols.map(c=>'<td>'+cellFor(c.key,r)+'</td>').join("")+'</tr>').join("");
+  renderPager(list.length,pages,startIdx,slice.length);
+}
+function renderPager(total,pages,startIdx,count){
+  const pager=$("#pager");
+  if(pages<=1){pager.innerHTML='<div class="pager-info">'+total+' meeting'+(total===1?"":"s")+'</div>';return}
+  let shown;const all=[];for(let i=1;i<=pages;i++)all.push(i);
+  if(pages<=7)shown=all;else{const s=new Set([1,2,pages-1,pages,page-1,page,page+1]);shown=all.filter(i=>s.has(i))}
+  let prev=0;const nums=shown.map(i=>{let out="";if(i-prev>1)out+='<span class="pager-gap">…</span>';prev=i;return out+'<button class="pager-btn'+(i===page?' active':'')+'" data-page="'+i+'">'+i+'</button>'}).join("");
+  pager.innerHTML='<div class="pager-info">Showing '+(startIdx+1)+'–'+(startIdx+count)+' of '+total+'</div><div class="pager-ctrls"><button class="pager-btn" data-page="'+(page-1)+'"'+(page<=1?' disabled':'')+'>‹</button>'+nums+'<button class="pager-btn" data-page="'+(page+1)+'"'+(page>=pages?' disabled':'')+'>›</button></div>';
 }
 function rerenderRow(id){const cols=visibleColsList(),r=load().find(x=>x.id===id),tr=document.getElementById("row-"+id);if(r&&tr)tr.innerHTML=cols.map(c=>'<td>'+cellFor(c.key,r)+'</td>').join("")}
 function updateField(id,field,value){const l=load(),r=l.find(x=>x.id===id);if(!r)return;r[field]=value;r.updatedAt=new Date().toISOString();persist(l);sbUpsertBooking(r)}
@@ -725,7 +764,7 @@ function setupAuth(){
   $("#login-pw").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
   $("#signout-btn").addEventListener("click",async()=>{if(sb)await sb.auth.signOut()});
   $("#import-btn").addEventListener("click",importLocal);
-  $("#view-picker").addEventListener("change",e=>{VIEW_USER=e.target.value;refreshActiveView()});
+  $("#view-picker").addEventListener("change",e=>{VIEW_USER=e.target.value;page=1;refreshActiveView()});
 }
 
 /* ---------- Init ---------- */
@@ -749,11 +788,13 @@ function init(){
   document.addEventListener("click",e=>{if(e.target.closest(".pop")||e.target.closest(".pop-trigger")||e.target.closest(".stat-dd"))return;closeMenus()});
 
   // filters
-  $("#search").addEventListener("input",renderTable);
-  $("#f-status").addEventListener("change",e=>{filterStatus=e.target.value;updateFilterBadge();renderTable()});
-  $("#f-mmonth").addEventListener("change",e=>{filterMM=e.target.value;updateFilterBadge();renderTable()});
-  $("#f-bmonth").addEventListener("change",e=>{filterBM=e.target.value;updateFilterBadge();renderTable()});
-  $("#clear-filters").addEventListener("click",()=>{filterStatus="all";filterMM="all";filterBM="all";rebuildFilters();renderTable();closeMenus()});
+  $("#search").addEventListener("input",()=>{page=1;renderTable()});
+  $("#f-status").addEventListener("change",e=>{filterStatus=e.target.value;page=1;updateFilterBadge();renderTable()});
+  $("#f-mmonth").addEventListener("change",e=>{filterMM=e.target.value;page=1;updateFilterBadge();renderTable()});
+  $("#f-bmonth").addEventListener("change",e=>{filterBM=e.target.value;page=1;updateFilterBadge();renderTable()});
+  $("#clear-filters").addEventListener("click",()=>{filterStatus="all";filterMM="all";filterBM="all";page=1;rebuildFilters();renderTable();closeMenus()});
+  $("#thead-row").addEventListener("click",e=>{const th=e.target.closest(".th-sort");if(!th)return;const k=th.dataset.sort;if(sortKey===k)sortDir=sortDir==="asc"?"desc":"asc";else{sortKey=k;sortDir="asc"}page=1;renderTable()});
+  $("#pager").addEventListener("click",e=>{const b=e.target.closest(".pager-btn");if(!b||b.disabled)return;const p=parseInt(b.dataset.page,10);if(!isNaN(p)){page=p;renderTable()}});
   $("#rep-month").addEventListener("change",renderReport);
   build121();
   $("#o2o-month").value=new Date().toISOString().slice(0,7);
