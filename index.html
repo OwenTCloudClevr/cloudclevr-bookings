@@ -164,6 +164,11 @@
   .card-pad{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px 22px}
   .card-pad h3{margin:0 0 4px;font-size:15px}.card-pad .sub{margin:0 0 18px;font-size:12.5px;color:var(--muted)}
   .pie-wrap{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+  .rep-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  .rep-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;padding:7px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+  .rep-table td{padding:8px 10px;border-bottom:1px solid var(--line-2);vertical-align:top}
+  .rep-table tr:last-child td{border-bottom:0}
+  .rep-table td:last-child,.rep-table th:last-child{text-align:right;white-space:nowrap}
   .legend{display:flex;flex-direction:column;gap:9px;flex:1;min-width:150px}
   .legend-row{display:flex;align-items:center;gap:9px;font-size:13px}
   .legend-row .sw{width:13px;height:13px;border-radius:4px;flex:none;display:grid;place-items:center;color:#fff}
@@ -198,6 +203,11 @@
   .auth-card input:focus{outline:none;border-color:var(--green-dark);box-shadow:0 0 0 3px var(--green-soft)}
   .auth-btn{width:100%;justify-content:center;margin-top:20px;padding:12px}
   .auth-err{color:var(--danger);font-size:12.5px;font-weight:600;margin-top:12px;min-height:16px;text-align:left}
+  .auth-err.ok{color:var(--green-deep)}
+  .auth-link{display:block;width:100%;margin-top:14px;background:none;border:0;color:var(--green-deep);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;text-align:center}
+  .auth-link:hover{text-decoration:underline}
+  .acct-btn{width:32px;height:32px;border-radius:8px;border:1px solid rgba(0,0,0,.2);background:#fff;display:grid;place-items:center;cursor:pointer;color:var(--black)}
+  .acct-btn:hover{background:var(--grey)}
   .appbar-user{display:flex;align-items:center;gap:10px;margin-left:16px}
   .user-chip{font-size:12.5px;font-weight:600;color:var(--black);background:rgba(0,0,0,.10);padding:5px 11px;border-radius:20px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .signout{border:0;background:var(--black);color:#fff;font-family:inherit;font-weight:600;font-size:12.5px;padding:6px 13px;border-radius:8px;cursor:pointer}
@@ -459,17 +469,17 @@ function chev(){return '<svg class="chev" width="11" height="11" viewBox="0 0 12
 /* ---------- Config ---------- */
 const PILLARS={
   communications:{label:"Communications",tag:"Comms & Collaboration",accent:"#2563EB",url:"https://cloudclevr.com/digital-workplace/comms-collaboration/",
-    fields:[{id:"provider",label:"Current provider",type:"text"},{id:"vendor",label:"Current vendor",type:"text"},{id:"contractEnd",label:"Current contract end date",type:"date"},{id:"users",label:"Number of users",type:"number"}]},
+    fields:[{id:"info",label:"Details for the account manager",type:"textarea",ph:"Current provider, vendor, contract end date, number of users - anything useful for this pillar..."}]},
   connectivity:{label:"Connectivity",tag:"Network Services",accent:"#0E9AA7",url:"https://cloudclevr.com/network-services/connectivity/",
-    fields:[{id:"supplier",label:"Current supplier",type:"text"},{id:"contractEnd",label:"Current contract end date",type:"date"},{id:"speeds",label:"Current speeds",type:"text",ph:"e.g. 100/30 Mbps"},{id:"connType",label:"Type of connection",type:"select",options:["FTTP","FTTC","SoGEA","Leased line","SD-WAN","Broadband (ADSL)","Cellular / wireless","Other"]}]},
+    fields:[{id:"info",label:"Details for the account manager",type:"textarea",ph:"Current supplier, contract end date, speeds, connection type (FTTP / FTTC / SoGEA / leased line / SD-WAN)..."}]},
   itServices:{label:"IT Services",tag:"Managed IT",accent:"#7C3AED",url:"https://cloudclevr.com/it-and-security-services/managed-it-services/",
-    fields:[{id:"vendor",label:"Current vendor",type:"text"},{id:"contractEnd",label:"Current contract end date",type:"date"},{id:"users",label:"Number of users",type:"number"},{id:"devices",label:"Number of devices",type:"number"}]},
+    fields:[{id:"info",label:"Details for the account manager",type:"textarea",ph:"Current vendor, contract end date, number of users and devices..."}]},
   cyberSecurity:{label:"Cyber Security",tag:"Managed Cyber Security",accent:"#DC2626",url:"https://cloudclevr.com/it-and-security-services/managed-cyber-security/",
-    fields:[{id:"vendor",label:"Current vendor",type:"text"},{id:"contractEnd",label:"Current contract end date",type:"date"},{id:"users",label:"Number of users",type:"number"},{id:"devices",label:"Number of devices",type:"number"},{id:"protections",label:"What protections are in place",type:"textarea",ph:"e.g. Microsoft Defender, EDR/MDR, email filtering, MFA, firewall, backup, SIEM..."},{id:"reporting",label:"Receiving dashboard reporting?",type:"select",options:["Unknown","Yes","No"]}]},
+    fields:[{id:"info",label:"Details for the account manager",type:"textarea",ph:"Current vendor, contract end, users/devices, protections in place (Defender, EDR/MDR, MFA, firewall, backup, SIEM), dashboard reporting?..."}]},
   mobility:{label:"Mobility",tag:"Network Services",accent:"#EA580C",url:"https://cloudclevr.com/network-services/mobility/",
-    fields:[{id:"vendor",label:"Current vendor",type:"text"},{id:"contractEnd",label:"Current contract end date",type:"date"},{id:"simCards",label:"Number of SIM cards",type:"number"},{id:"ownedDevices",label:"Number of owned devices",type:"number"},{id:"leasedDevices",label:"Number of leased devices",type:"number"}]},
+    fields:[{id:"info",label:"Details for the account manager",type:"textarea",ph:"Current vendor, contract end date, number of SIM cards, owned and leased devices..."}]},
   contactCentre:{label:"Contact Centre",tag:"Customer Contact",accent:"#16A34A",url:"https://cloudclevr.com/digital-workplace/contact-centre/",
-    fields:[{id:"vendor",label:"Current vendor / platform",type:"text"},{id:"contractEnd",label:"Current contract end date",type:"date"},{id:"agents",label:"Number of agents / seats",type:"number"},{id:"deployment",label:"Deployment model",type:"select",options:["Unknown","Cloud (CCaaS)","Private cloud","On-premise","Hybrid"]},{id:"channels",label:"Channels handled",type:"text",ph:"e.g. Voice, email, webchat, SMS, WhatsApp"},{id:"direction",label:"Inbound / outbound / blended",type:"select",options:["Unknown","Inbound","Outbound","Blended"]},{id:"volume",label:"Approx. monthly contact volume",type:"text",ph:"e.g. ~4,000 calls/month"},{id:"ai",label:"AI / automation in use?",type:"select",options:["Unknown","None","IVR only","Chatbot","Agent assist","Multiple"]},{id:"analytics",label:"Reporting & analytics in place?",type:"select",options:["Unknown","Yes","No"]}]}
+    fields:[{id:"info",label:"Details for the account manager",type:"textarea",ph:"Current vendor/platform, contract end, agents/seats, deployment, channels, inbound/outbound, monthly volume, AI/automation, analytics..."}]}
 };
 const PILLAR_KEYS=Object.keys(PILLARS);
 const STATUSES=["Scheduled","Confirmed","Sat Qualified","Sat Unqualified","Cancelled","No Longer Interested","Proposal Sent","Contract Sent","Contract Signed"];
@@ -508,6 +518,7 @@ function fmtDateUK(v){if(!v)return"—";const d=new Date(v);if(isNaN(d))return v
 function fmtDateTimeUK(v){if(!v)return"—";const d=new Date(v);if(isNaN(d))return v;return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes())}
 function gbp(n){return "£"+Number(n||0).toLocaleString("en-GB")}
 function toast(m){const t=$("#toast");$("#toast-msg").textContent=m;t.classList.add("show");clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove("show"),2500)}
+function labelize(id){const M={info:"Details",provider:"Current provider",supplier:"Current supplier",vendor:"Current vendor",contractEnd:"Contract end date",speeds:"Current speeds",connType:"Connection type",users:"Number of users",devices:"Number of devices",protections:"Protections in place",reporting:"Dashboard reporting",simCards:"SIM cards",ownedDevices:"Owned devices",leasedDevices:"Leased devices",agents:"Agents / seats",deployment:"Deployment model",channels:"Channels handled",direction:"Inbound / outbound",volume:"Monthly volume",ai:"AI / automation",analytics:"Reporting & analytics"};return M[id]||id}
 
 /* ---------- Pillars in modal ---------- */
 function buildPillars(){
@@ -628,7 +639,7 @@ function pdfHead(title){return '<div class="p-head"><img src="'+LOGO_REVERSE+'" 
 function rowsHTML(pairs){return pairs.map(p=>'<div class="p-row"><div class="p-k">'+esc(p[0])+'</div><div class="p-v">'+esc(p[1]&&String(p[1]).trim()?p[1]:"—")+'</div></div>').join("")}
 function exportSingle(r){let body='<div class="p-sheet">'+pdfHead("Meeting Booking Handover");body+='<p class="p-co">'+esc(r.companyName||"Untitled")+'</p><p class="p-sub">'+esc(r.contactName||"")+(r.jobTitle?" · "+esc(r.jobTitle):"")+(r.website?" · "+esc(r.website):"")+'</p>';
   body+='<div class="p-section"><h3>Prospect &amp; meeting</h3><div class="p-rows">'+rowsHTML([["Contact phone",r.phone],["Contact email",r.email],["Company website",r.website],["Date booked",fmtDateUK(r.dateBooked)],["Meeting scheduled",fmtDateTimeUK(r.meetingDate)],["Meeting type",r.meetingType||"Microsoft Teams"]].concat(r.meetingType==="Face-to-face"?[["Company address",r.address]]:[]).concat([["Account manager",r.accountManager],["BDE (booked by)",r.bde],["Opportunity value",r.opportunityValue?gbp(r.opportunityValue):""],["Added to Outlook",r.outlook?"Yes":"No"],["Status",r.status||"Scheduled"]]))+'</div></div>';
-  (r.pillarOrder||Object.keys(r.pillars||{})).forEach(k=>{const p=PILLARS[k],d=r.pillars[k];if(!p||!d)return;body+='<div class="p-section"><h3><span class="pdot" style="background:'+p.accent+'"></span>'+esc(p.label)+'<span class="ptag">'+esc(p.tag)+'</span></h3><div class="p-rows">'+rowsHTML(p.fields.map(f=>[f.label,d[f.id]]))+'</div></div>'});
+  (r.pillarOrder||Object.keys(r.pillars||{})).forEach(k=>{const p=PILLARS[k],d=r.pillars[k];if(!p||!d)return;const rows=Object.keys(d).filter(id=>String(d[id]==null?"":d[id]).trim()!=="").map(id=>[labelize(id),d[id]]);body+='<div class="p-section"><h3><span class="pdot" style="background:'+p.accent+'"></span>'+esc(p.label)+'<span class="ptag">'+esc(p.tag)+'</span></h3><div class="p-rows">'+(rows.length?rowsHTML(rows):'<div style="color:#888;font-size:12px">No details captured</div>')+'</div></div>'});
   if(r.notes&&r.notes.trim())body+='<div class="p-section"><h3>Call notes / transcript</h3><div class="p-rows" style="padding-top:11px"><div class="p-notes">'+esc(r.notes)+'</div></div></div>';
   body+='</div>';printHTML(body,"Booking - "+(r.companyName||"CloudClevr"))}
 function exportList(){const list=getFiltered();if(!list.length){toast("Nothing to export");return}const rows=list.map(r=>'<tr><td>'+esc(r.companyName||"—")+'</td><td>'+esc(r.contactName||"—")+'</td><td>'+esc(r.phone||"—")+'</td><td>'+fmtDateTimeUK(r.meetingDate)+'</td><td>'+esc(r.meetingType||"Teams")+'</td><td>'+esc(r.accountManager||"—")+'</td><td>'+(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ")+'</td><td>'+esc(r.status||"Scheduled")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"—")+'</td></tr>').join("");let body='<div class="p-sheet">'+pdfHead("Scheduled Meetings")+'<p class="p-sub" style="margin-top:-6px">'+list.length+' booking'+(list.length>1?"s":"")+'</p><table class="p-list-table"><thead><tr><th>Company</th><th>Contact</th><th>Phone</th><th>Meeting</th><th>Type</th><th>AM</th><th>Pillars</th><th>Status</th><th>Opp £</th></tr></thead><tbody>'+rows+'</tbody></table></div>';printHTML(body,"Scheduled Meetings")}
@@ -641,25 +652,30 @@ function renderReport(){const host=$("#report-body"),mk=$("#rep-month").value;
   const cohort=scopedBookings().filter(r=>monthKey(r.dateBooked)===mk),n=cohort.length;
   let dsum=0,dc=0;cohort.forEach(r=>{if(r.dateBooked&&r.meetingDate){const days=(new Date(r.meetingDate)-new Date(r.dateBooked))/86400000;if(!isNaN(days)){dsum+=days;dc++}}});
   const avgDays=dc?dsum/dc:null;
-  const sitCount=cohort.filter(r=>SIT_SET.has(r.status||"")).length,sitRate=n?Math.round(sitCount/n*100):0;
+  const today=new Date();today.setHours(23,59,59,999);
+  const due=cohort.filter(r=>{const d=r.meetingDate?new Date(r.meetingDate):null;return d&&!isNaN(d)&&d<=today});
+  const dueN=due.length,sitCount=due.filter(r=>SIT_SET.has(r.status||"")).length,sitRate=dueN?Math.round(sitCount/dueN*100):0;
   const won=cohort.filter(r=>r.status==="Contract Signed"),wonVal=won.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0);
   const totalOpp=cohort.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0),valued=cohort.filter(r=>Number(r.opportunityValue)>0).length,avgOpp=valued?totalOpp/valued:0;
   const pc={};PILLAR_KEYS.forEach(k=>pc[k]=0);cohort.forEach(r=>(r.pillarOrder||Object.keys(r.pillars||{})).forEach(k=>{if(pc[k]!=null)pc[k]++}));const totP=Object.values(pc).reduce((a,b)=>a+b,0);
   const byStat={};cohort.forEach(r=>{const s=r.status||"Scheduled";if(!byStat[s])byStat[s]={c:0,v:0};byStat[s].c++;byStat[s].v+=Number(r.opportunityValue)||0});
-  const maxV=Math.max(1,...Object.values(byStat).map(o=>o.v));
-  const brkRows=STATUSES.filter(s=>byStat[s]).map(s=>{const o=byStat[s],sc=STATUS_COLOR[s];return '<div class="brk-row"><div class="brk-name"><span style="color:'+sc[1]+';display:grid;place-items:center">'+statusIcon(s,15)+'</span>'+esc(s)+'</div><div class="brk-bar"><span style="width:'+(o.v/maxV*100)+'%"></span></div><div class="brk-val">'+gbp(o.v)+' <small>('+o.c+')</small></div></div>'}).join("");
+  const repOpp=REPORT_STATUSES.reduce((a,s)=>a+(byStat[s]?byStat[s].v:0),0);
+  const maxV=Math.max(1,...REPORT_STATUSES.map(s=>byStat[s]?byStat[s].v:0));
+  const brkRows=REPORT_STATUSES.filter(s=>byStat[s]).map(s=>{const o=byStat[s],sc=STATUS_COLOR[s],nm=s==="Contract Signed"?"Closed won (Contract Signed)":s;return '<div class="brk-row"><div class="brk-name"><span style="color:'+sc[1]+';display:grid;place-items:center">'+statusIcon(s,15)+'</span>'+esc(nm)+'</div><div class="brk-bar"><span style="width:'+(o.v/maxV*100)+'%"></span></div><div class="brk-val">'+gbp(o.v)+' <small>('+o.c+')</small></div></div>'}).join("");
+  const sumRows=cohort.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");return '<tr><td>'+esc(r.companyName||"—")+'</td><td>'+esc(r.contactName||"—")+'</td><td>'+esc(r.accountManager||"—")+'</td><td>'+esc(r.bde||"—")+'</td><td>'+esc(pl||"—")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"—")+'</td></tr>'}).join("");
 
   host.innerHTML='<div class="metric-grid">'+
-      metric("Bookings","Made in "+monthLabel(mk),n,false)+
-      metric("Sit rate",n?sitCount+" qualified of "+n+" booked":"No bookings",n?sitRate+"%":"—",false)+
+      metric("Bookings","Booked in "+monthLabel(mk),n,false)+
+      metric("Sit rate (to date)",dueN?sitCount+" sat-qualified of "+dueN+" held · future excluded":"No meetings held yet",dueN?sitRate+"%":"—",false)+
       metric("Avg days booked → scheduled",avgDays==null?"No dated pairs":"Calendar days",avgDays==null?"—":avgDays.toFixed(1),false)+
       metric("Total opportunity value",valued?gbp(Math.round(avgOpp))+" avg · "+valued+" valued":"No values entered",gbp(totalOpp),false)+
       metric("Closed won",won.length+" signed this month",gbp(wonVal),true)+
     '</div>'+
     '<div class="cards2">'+
       '<div class="card-pad"><h3>Bookings by pillar</h3><p class="sub">'+(totP?totP+" pillar selections across "+n+" booking"+(n===1?"":"s"):"No pillars recorded")+'</p><div class="pie-wrap">'+pieSVG(pc,totP)+pieLegend(pc,totP)+'</div></div>'+
-      '<div class="card-pad"><h3>Opportunity value by status</h3><p class="sub">'+(totalOpp?gbp(totalOpp)+" total across the funnel this month":"No opportunity values entered yet")+'</p>'+(brkRows||'<div style="color:var(--muted);font-size:13px;padding:8px 0">No bookings this month.</div>')+'</div>'+
-    '</div>'}
+      '<div class="card-pad"><h3>Opportunity value by status</h3><p class="sub">'+(repOpp?gbp(repOpp)+" across proposals, contracts and closed won":"Nothing at proposal stage or beyond yet")+'</p>'+(brkRows||'<div style="color:var(--muted);font-size:13px;padding:8px 0">No proposals, contracts or closed won this month.</div>')+'</div>'+
+    '</div>'+
+    '<div class="card-pad" style="margin-top:16px"><h3>Booking summary</h3><p class="sub">'+n+" booking"+(n===1?"":"s")+" booked in "+monthLabel(mk)+'</p><div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Company</th><th>Contact</th><th>Account Manager</th><th>BDE</th><th>Pillar</th><th>Opp Value</th></tr></thead><tbody>'+(sumRows||'<tr><td colspan="6" style="color:var(--muted)">No bookings.</td></tr>')+'</tbody></table></div></div>'}
 function metric(label,sub,val,black){return '<div class="metric'+(black?' accent-black':'')+'"><div class="m-label">'+esc(label)+'</div><div class="m-val">'+esc(val)+'</div><div class="m-sub">'+esc(sub)+'</div></div>'}
 function pieSVG(c,total){const size=170,r=78,cx=85,cy=85;if(!total)return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'"><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="#F0F0F0"/></svg>';let ang=-Math.PI/2,paths="";PILLAR_KEYS.forEach(k=>{const v=c[k];if(!v)return;const slice=v/total*Math.PI*2,a2=ang+slice,x1=cx+r*Math.cos(ang),y1=cy+r*Math.sin(ang),x2=cx+r*Math.cos(a2),y2=cy+r*Math.sin(a2),large=slice>Math.PI?1:0;if(v===total)paths+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+PILLARS[k].accent+'"/>';else paths+='<path d="M'+cx+' '+cy+' L'+x1.toFixed(2)+' '+y1.toFixed(2)+' A'+r+' '+r+' 0 '+large+' 1 '+x2.toFixed(2)+' '+y2.toFixed(2)+' Z" fill="'+PILLARS[k].accent+'"/>';ang=a2});return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+paths+'<circle cx="'+cx+'" cy="'+cy+'" r="40" fill="#fff"/><text x="'+cx+'" y="'+(cy-2)+'" text-anchor="middle" font-size="21" font-weight="800" fill="#161616">'+total+'</text><text x="'+cx+'" y="'+(cy+14)+'" text-anchor="middle" font-size="9.5" fill="#6B6F6C">selections</text></svg>'}
 function pieLegend(c,total){const rows=PILLAR_KEYS.filter(k=>c[k]>0).map(k=>{const v=c[k],pct=total?Math.round(v/total*100):0;return '<div class="legend-row"><span class="sw" style="background:'+PILLARS[k].accent+'">'+pillarIcon(k,9)+'</span><span class="lg-name">'+esc(PILLARS[k].label)+'</span><span class="lg-val">'+v+' · '+pct+'%</span></div>'}).join("");return '<div class="legend">'+(rows||'<div style="color:var(--muted);font-size:13px">No pillars recorded.</div>')+'</div>'}
@@ -682,7 +698,7 @@ function o2oUser(){return (ME&&ME.is_admin&&VIEW_USER!=="all")?VIEW_USER:(ME?ME.
 function load121(){const uid=o2oUser(),map={};O2O_ROWS.forEach(r=>{if(r.user_id===uid)map[r.month]=r.data});return map}
 async function sbUpsert121(uid,month,data){if(!sb)return;const{error}=await sb.from("one_to_ones").upsert({user_id:uid,month:month,data:data,updated_at:new Date().toISOString()},{onConflict:"user_id,month"});if(error)toast("1-2-1 save failed: "+error.message)}
 function prevMonthKey(mk){const a=mk.split("-");let y=+a[0],m=+a[1]-1;if(m<1){m=12;y--}return y+"-"+pad(m)}
-function monthStats(mk){const c=bookingsForUser(o2oUser()).filter(r=>monthKey(r.dateBooked)===mk),n=c.length,sit=c.filter(r=>SIT_SET.has(r.status||"")).length;return{n,sitRate:n?Math.round(sit/n*100):0,opp:c.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0),won:c.filter(r=>r.status==="Contract Signed").reduce((a,r)=>a+(Number(r.opportunityValue)||0),0)}}
+function monthStats(mk){const c=bookingsForUser(o2oUser()).filter(r=>monthKey(r.dateBooked)===mk),n=c.length;const today=new Date();today.setHours(23,59,59,999);const due=c.filter(r=>{const d=r.meetingDate?new Date(r.meetingDate):null;return d&&!isNaN(d)&&d<=today});const sit=due.filter(r=>SIT_SET.has(r.status||"")).length;return{n,dueN:due.length,sitRate:due.length?Math.round(sit/due.length*100):0,opp:c.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0),won:c.filter(r=>r.status==="Contract Signed").reduce((a,r)=>a+(Number(r.opportunityValue)||0),0)}}
 function o2oField(f){const id="o2o-"+f.k;let ctl;if(f.type==="select")ctl='<select id="'+id+'">'+f.options.map(o=>'<option>'+esc(o)+'</option>').join("")+'</select>';else ctl='<input id="'+id+'" type="'+(f.type||"number")+'">';return '<div class="o2o-field"><label for="'+id+'">'+esc(f.t)+'</label>'+ctl+'</div>'}
 function build121(){
   $("#o2o-meta").innerHTML=O2O_META.map(o2oField).join("");
@@ -693,7 +709,7 @@ function lastName(){const all=load121(),keys=Object.keys(all).sort().reverse();f
 function render121(){
   const mk=$("#o2o-month").value||new Date().toISOString().slice(0,7);$("#o2o-month").value=mk;
   const all=load121(),rec=all[mk]||null,st=monthStats(mk),prev=monthStats(prevMonthKey(mk));
-  $("#o2o-stats").innerHTML=metric("Meetings booked","Logged for "+monthLabel(mk),st.n,false)+metric("Sit rate",st.n+" booked",st.n?st.sitRate+"%":"—",false)+metric("Opportunity value","This month",gbp(st.opp),false)+metric("Closed won","Signed this month",gbp(st.won),true);
+  $("#o2o-stats").innerHTML=metric("Meetings booked","Logged for "+monthLabel(mk),st.n,false)+metric("Sit rate (to date)",st.dueN+" held",st.dueN?st.sitRate+"%":"—",false)+metric("Opportunity value","This month",gbp(st.opp),false)+metric("Closed won","Signed this month",gbp(st.won),true);
   setVal("o2o-name",rec?rec.name:lastName());
   setVal("o2o-date",rec&&rec.date?rec.date:new Date().toISOString().slice(0,10));
   setVal("o2o-reviewer",rec?rec.reviewer:"");
@@ -714,7 +730,7 @@ let o2oTimer=null;function autosave121(){clearTimeout(o2oTimer);o2oTimer=setTime
 function collect121(){const mk=$("#o2o-month").value,rec={month:mk,updatedAt:new Date().toISOString()};O2O_META.forEach(f=>rec[f.k]=getVal("o2o-"+f.k));O2O_FIGS.forEach(f=>rec[f.k]=getVal("o2o-"+f.k));O2O_SECTIONS.forEach(s=>rec[s.k]=getVal("o2o-"+s.k));return rec}
 function export121(){const mk=$("#o2o-month").value,rec=collect121(),st=monthStats(mk);
   let body='<div class="p-sheet">'+pdfHead("1-2-1 Meeting")+'<p class="p-co">1-2-1 Meeting — '+esc(monthLabel(mk))+'</p><p class="p-sub">'+esc(rec.name||"")+(rec.role?" · "+esc(rec.role):"")+(rec.reviewer?" · Reviewed by "+esc(rec.reviewer):"")+(rec.date?" · "+fmtDateUK(rec.date):"")+'</p>';
-  body+='<div class="p-section"><h3>Figures</h3><div class="p-rows">'+rowsHTML([["Customer meetings booked",rec.booked],["Previous month meetings booked",rec.prevBooked],["Booked target",rec.target],["Sit rate (qualified)",st.n?st.sitRate+"%":"—"],["Opportunity value (month)",gbp(st.opp)],["Closed won (month)",gbp(st.won)]])+'</div></div>';
+  body+='<div class="p-section"><h3>Figures</h3><div class="p-rows">'+rowsHTML([["Customer meetings booked",rec.booked],["Previous month meetings booked",rec.prevBooked],["Booked target",rec.target],["Sit rate (to date)",st.dueN?st.sitRate+"%":"—"],["Opportunity value (month)",gbp(st.opp)],["Closed won (month)",gbp(st.won)]])+'</div></div>';
   O2O_SECTIONS.forEach(s=>{body+='<div class="p-section"><h3>'+esc(s.t)+'</h3><div class="p-rows" style="padding-top:11px"><div class="p-notes">'+esc(rec[s.k]&&rec[s.k].trim()?rec[s.k]:"—")+'</div></div></div>'});
   body+='</div>';printHTML(body,"1-2-1 "+(rec.name||"")+" "+mk)}
 
@@ -802,8 +818,7 @@ function init(){
   $("#save-btn").addEventListener("click",handleSave);
   $("#cancel-btn").addEventListener("click",closeModal);
   $("#modal-x").addEventListener("click",closeModal);
-  $("#overlay").addEventListener("click",e=>{if(e.target===$("#overlay"))closeModal()});
-  document.addEventListener("keydown",e=>{if(e.key==="Escape"){if($("#overlay").classList.contains("open"))closeModal();else closeMenus()}});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"){if($("#overlay").classList.contains("open"))return;else closeMenus()}});
   $("#meetingType").addEventListener("change",toggleAddress);
 
   // popover triggers
