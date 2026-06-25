@@ -169,6 +169,15 @@
   .rep-table td{padding:8px 10px;border-bottom:1px solid var(--line-2);vertical-align:top}
   .rep-table tr:last-child td{border-bottom:0}
   .rep-table td:last-child,.rep-table th:last-child{text-align:right;white-space:nowrap}
+  .card-head-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px}
+  .card-head-row h3{margin:0}
+  .mini-select{padding:6px 26px 6px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:12px;font-family:inherit;color:var(--ink);appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%236B6F6C' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer}
+  .rep-tabs{display:inline-flex;gap:4px;background:var(--grey);padding:3px;border-radius:9px}
+  .rep-tab{border:0;background:transparent;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--muted);padding:6px 12px;border-radius:7px;cursor:pointer}
+  .rep-tab.active{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .st-pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+  .rep-pdf-btn{padding:9px 14px;border:0;border-radius:9px;background:#111;color:#fff;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+  .rep-pdf-btn:hover{background:#000}
   .legend{display:flex;flex-direction:column;gap:9px;flex:1;min-width:150px}
   .legend-row{display:flex;align-items:center;gap:9px;font-size:13px}
   .legend-row .sw{width:13px;height:13px;border-radius:4px;flex:none;display:grid;place-items:center;color:#fff}
@@ -319,7 +328,12 @@
   <section class="view" id="view-reports">
     <div class="head-row">
       <div><h1>Reporting</h1><p>Combined SDR and BDM view, by the month a meeting was booked.</p></div>
-      <div class="rep-tools"><label for="rep-month">Month</label><select id="rep-month"></select></div>
+      <div class="rep-tools">
+        <label for="rep-type">Period</label>
+        <select id="rep-type"><option value="month">Month</option><option value="quarter">Quarter</option><option value="year">Year</option></select>
+        <select id="rep-period"></select>
+        <button class="rep-pdf-btn" id="rep-pdf">Download PDF</button>
+      </div>
     </div>
     <div id="report-body"></div>
   </section>
@@ -646,36 +660,87 @@ function exportList(){const list=getFiltered();if(!list.length){toast("Nothing t
 function printHTML(html,title){$("#print-root").innerHTML=html;const old=document.title;document.title=title;window.print();setTimeout(()=>document.title=old,600)}
 
 /* ---------- Reports ---------- */
-function buildReportMonths(){const set=new Set();scopedBookings().forEach(r=>{const k=monthKey(r.dateBooked);if(k)set.add(k)});const months=[...set].sort().reverse(),sel=$("#rep-month");if(!months.length){sel.innerHTML='<option value="">No data yet</option>';return}const cur=sel.value&&months.includes(sel.value)?sel.value:months[0];sel.innerHTML=months.map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+monthLabel(k)+'</option>').join("")}
-function renderReport(){const host=$("#report-body"),mk=$("#rep-month").value;
-  if(!mk){host.innerHTML='<div class="empty"><div class="ico">'+svg('<path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>',22).replace('stroke="currentColor"','stroke="#2FA221"')+'</div><h3>No data to report</h3><p>Save some bookings and they will appear here, grouped by the month they were booked.</p></div>';return}
-  const cohort=scopedBookings().filter(r=>monthKey(r.dateBooked)===mk),n=cohort.length;
+let repStatusFilter="all",repSumTab="all";
+function qOf(m){return Math.floor(m/3)+1}
+function quarterKey(v){if(!v)return null;const d=new Date(v);if(isNaN(d))return null;return d.getFullYear()+"-Q"+qOf(d.getMonth())}
+function quarterLabel(k){const a=k.split("-Q"),q=+a[1],mm=[["Jan","Mar"],["Apr","Jun"],["Jul","Sep"],["Oct","Dec"]][q-1];return "Q"+q+" "+a[0]+" ("+mm[0]+"\u2013"+mm[1]+")"}
+function yearKey(v){if(!v)return null;const d=new Date(v);if(isNaN(d))return null;return ""+d.getFullYear()}
+function periodKeyOf(r){const t=$("#rep-type").value;return t==="month"?monthKey(r.dateBooked):t==="quarter"?quarterKey(r.dateBooked):yearKey(r.dateBooked)}
+function periodLabelOf(t,k){return t==="month"?monthLabel(k):t==="quarter"?quarterLabel(k):k}
+function repScopeLabel(){if(ME&&ME.is_admin&&VIEW_USER!=="all"){const p=PROFILES.find(x=>x.id===VIEW_USER);return p?(p.full_name||p.email):"Selected user"}return "All team"}
+function buildReportPeriods(){
+  const t=$("#rep-type").value,sel=$("#rep-period"),set=new Set();
+  scopedBookings().forEach(r=>{const k=t==="month"?monthKey(r.dateBooked):t==="quarter"?quarterKey(r.dateBooked):yearKey(r.dateBooked);if(k)set.add(k)});
+  const keys=[...set].sort().reverse();
+  if(!keys.length){sel.innerHTML='<option value="">No data yet</option>';return}
+  const cur=sel.value&&keys.includes(sel.value)?sel.value:keys[0];
+  sel.innerHTML=keys.map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+esc(periodLabelOf(t,k))+'</option>').join("");
+}
+function buildReportMonths(){buildReportPeriods()}
+function computeReport(){
+  const t=$("#rep-type").value,pk=$("#rep-period").value;if(!pk)return null;
+  const cohort=scopedBookings().filter(r=>periodKeyOf(r)===pk),n=cohort.length;
   let dsum=0,dc=0;cohort.forEach(r=>{if(r.dateBooked&&r.meetingDate){const days=(new Date(r.meetingDate)-new Date(r.dateBooked))/86400000;if(!isNaN(days)){dsum+=days;dc++}}});
   const avgDays=dc?dsum/dc:null;
   const today=new Date();today.setHours(23,59,59,999);
   const due=cohort.filter(r=>{const d=r.meetingDate?new Date(r.meetingDate):null;return d&&!isNaN(d)&&d<=today});
   const dueN=due.length,sitCount=due.filter(r=>SIT_SET.has(r.status||"")).length,sitRate=dueN?Math.round(sitCount/dueN*100):0;
   const won=cohort.filter(r=>r.status==="Contract Signed"),wonVal=won.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0);
-  const totalOpp=cohort.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0),valued=cohort.filter(r=>Number(r.opportunityValue)>0).length,avgOpp=valued?totalOpp/valued:0;
+  const pipeline=cohort.filter(r=>r.status!=="Contract Signed");
+  const totalOpp=pipeline.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0),valued=pipeline.filter(r=>Number(r.opportunityValue)>0).length,avgOpp=valued?totalOpp/valued:0;
   const pc={};PILLAR_KEYS.forEach(k=>pc[k]=0);cohort.forEach(r=>(r.pillarOrder||Object.keys(r.pillars||{})).forEach(k=>{if(pc[k]!=null)pc[k]++}));const totP=Object.values(pc).reduce((a,b)=>a+b,0);
   const byStat={};cohort.forEach(r=>{const s=r.status||"Scheduled";if(!byStat[s])byStat[s]={c:0,v:0};byStat[s].c++;byStat[s].v+=Number(r.opportunityValue)||0});
   const repOpp=REPORT_STATUSES.reduce((a,s)=>a+(byStat[s]?byStat[s].v:0),0);
-  const maxV=Math.max(1,...REPORT_STATUSES.map(s=>byStat[s]?byStat[s].v:0));
-  const brkRows=REPORT_STATUSES.filter(s=>byStat[s]).map(s=>{const o=byStat[s],sc=STATUS_COLOR[s],nm=s==="Contract Signed"?"Closed won (Contract Signed)":s;return '<div class="brk-row"><div class="brk-name"><span style="color:'+sc[1]+';display:grid;place-items:center">'+statusIcon(s,15)+'</span>'+esc(nm)+'</div><div class="brk-bar"><span style="width:'+(o.v/maxV*100)+'%"></span></div><div class="brk-val">'+gbp(o.v)+' <small>('+o.c+')</small></div></div>'}).join("");
-  const sumRows=cohort.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");return '<tr><td>'+esc(r.companyName||"—")+'</td><td>'+esc(r.contactName||"—")+'</td><td>'+esc(r.accountManager||"—")+'</td><td>'+esc(r.bde||"—")+'</td><td>'+esc(pl||"—")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"—")+'</td></tr>'}).join("");
-
+  return {t,pk,plabel:periodLabelOf(t,pk),cohort,n,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp};
+}
+function statusPill(s){const sc=STATUS_COLOR[s||"Scheduled"]||["#eee","#555"];return '<span class="st-pill" style="background:'+sc[0]+';color:'+sc[1]+'">'+esc(s||"Scheduled")+'</span>'}
+function repSummaryRows(cohort,tab){
+  const list=tab==="pipeline"?cohort.filter(r=>REPORT_STATUSES.includes(r.status)):cohort;
+  if(!list.length)return '<tr><td colspan="7" style="color:var(--muted)">No bookings.</td></tr>';
+  return list.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");return '<tr><td>'+esc(r.companyName||"\u2014")+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+statusPill(r.status)+'</td></tr>'}).join("");
+}
+function setRepStatus(v){repStatusFilter=v;renderReport()}
+function setSumTab(v){repSumTab=v;renderReport()}
+function renderReport(){const host=$("#report-body");const R=computeReport();
+  if(!R){host.innerHTML='<div class="empty"><div class="ico">'+svg('<path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>',22).replace('stroke="currentColor"','stroke="#2FA221"')+'</div><h3>No data to report</h3><p>Save some bookings and they will appear here, grouped by when they were booked.</p></div>';return}
+  const {t,pk,plabel,cohort,n,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp}=R;
+  const statusesToShow=repStatusFilter==="all"?REPORT_STATUSES:[repStatusFilter];
+  const maxV=Math.max(1,...statusesToShow.map(s=>byStat[s]?byStat[s].v:0));
+  const brkRows=statusesToShow.filter(s=>byStat[s]).map(s=>{const o=byStat[s],sc=STATUS_COLOR[s],nm=s==="Contract Signed"?"Closed won (Contract Signed)":s;return '<div class="brk-row"><div class="brk-name"><span style="color:'+sc[1]+';display:grid;place-items:center">'+statusIcon(s,15)+'</span>'+esc(nm)+'</div><div class="brk-bar"><span style="width:'+(o.v/maxV*100)+'%"></span></div><div class="brk-val">'+gbp(o.v)+' <small>('+o.c+')</small></div></div>'}).join("");
+  const statusOpts=['all'].concat(REPORT_STATUSES).map(s=>'<option value="'+s+'"'+(repStatusFilter===s?' selected':'')+'>'+(s==="all"?"All statuses":esc(s))+'</option>').join("");
   host.innerHTML='<div class="metric-grid">'+
-      metric("Bookings","Booked in "+monthLabel(mk),n,false)+
-      metric("Sit rate (to date)",dueN?sitCount+" sat-qualified of "+dueN+" held · future excluded":"No meetings held yet",dueN?sitRate+"%":"—",false)+
-      metric("Avg days booked → scheduled",avgDays==null?"No dated pairs":"Calendar days",avgDays==null?"—":avgDays.toFixed(1),false)+
-      metric("Total opportunity value",valued?gbp(Math.round(avgOpp))+" avg · "+valued+" valued":"No values entered",gbp(totalOpp),false)+
-      metric("Closed won",won.length+" signed this month",gbp(wonVal),true)+
+      metric("Bookings","Booked in "+plabel,n,false)+
+      metric("Sit rate (to date)",dueN?sitCount+" sat-qualified of "+dueN+" held \u00b7 future excluded":"No meetings held yet",dueN?sitRate+"%":"\u2014",false)+
+      metric("Avg days booked \u2192 scheduled",avgDays==null?"No dated pairs":"Calendar days",avgDays==null?"\u2014":avgDays.toFixed(1),false)+
+      metric("Total opportunity value","Pipeline only \u00b7 excludes closed won"+(valued?" \u00b7 "+gbp(Math.round(avgOpp))+" avg":""),gbp(totalOpp),false)+
+      metric("Closed won",won.length+" signed",gbp(wonVal),true)+
     '</div>'+
     '<div class="cards2">'+
       '<div class="card-pad"><h3>Bookings by pillar</h3><p class="sub">'+(totP?totP+" pillar selections across "+n+" booking"+(n===1?"":"s"):"No pillars recorded")+'</p><div class="pie-wrap">'+pieSVG(pc,totP)+pieLegend(pc,totP)+'</div></div>'+
-      '<div class="card-pad"><h3>Opportunity value by status</h3><p class="sub">'+(repOpp?gbp(repOpp)+" across proposals, contracts and closed won":"Nothing at proposal stage or beyond yet")+'</p>'+(brkRows||'<div style="color:var(--muted);font-size:13px;padding:8px 0">No proposals, contracts or closed won this month.</div>')+'</div>'+
+      '<div class="card-pad"><div class="card-head-row"><h3>Opportunity value by status</h3><select class="mini-select" onchange="setRepStatus(this.value)">'+statusOpts+'</select></div><p class="sub">'+(repOpp?gbp(repOpp)+" across proposals, contracts and closed won":"Nothing at proposal stage or beyond yet")+'</p>'+(brkRows||'<div style="color:var(--muted);font-size:13px;padding:8px 0">Nothing to show for this status.</div>')+'</div>'+
     '</div>'+
-    '<div class="card-pad" style="margin-top:16px"><h3>Booking summary</h3><p class="sub">'+n+" booking"+(n===1?"":"s")+" booked in "+monthLabel(mk)+'</p><div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Company</th><th>Contact</th><th>Account Manager</th><th>BDE</th><th>Pillar</th><th>Opp Value</th></tr></thead><tbody>'+(sumRows||'<tr><td colspan="6" style="color:var(--muted)">No bookings.</td></tr>')+'</tbody></table></div></div>'}
+    '<div class="card-pad" style="margin-top:16px"><div class="card-head-row"><h3>Booking summary</h3><div class="rep-tabs"><button class="rep-tab'+(repSumTab==="all"?" active":"")+'" onclick="setSumTab(&quot;all&quot;)">Overall bookings</button><button class="rep-tab'+(repSumTab==="pipeline"?" active":"")+'" onclick="setSumTab(&quot;pipeline&quot;)">Proposals &amp; contracts</button></div></div>'+
+      '<p class="sub">'+(repSumTab==="pipeline"?"Bookings at proposal, contract or closed won":n+" booking"+(n===1?"":"s")+" booked in "+plabel)+'</p>'+
+      '<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Company</th><th>Contact</th><th>Account Manager</th><th>BDE</th><th>Pillar</th><th>Opp Value</th><th>Status</th></tr></thead><tbody>'+repSummaryRows(cohort,repSumTab)+'</tbody></table></div></div>';
+}
+function exportReport(){
+  const R=computeReport();if(!R){toast("Nothing to report yet");return}
+  const {t,plabel,cohort,n,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp}=R;
+  const typeLabel=t==="month"?"Month":t==="quarter"?"Quarter":"Year";
+  let body='<div class="p-sheet">'+pdfHead("CloudClevr Reporting");
+  body+='<p class="p-co">Reporting \u2014 '+esc(plabel)+'</p><p class="p-sub">'+typeLabel+' view \u00b7 '+esc(repScopeLabel())+' \u00b7 '+n+' booking'+(n===1?"":"s")+'</p>';
+  body+='<div class="p-section"><h3>Headline figures</h3><div class="p-rows">'+rowsHTML([["Bookings",n],["Sit rate (to date)",dueN?sitRate+"% ("+sitCount+" of "+dueN+" held)":"\u2014"],["Avg days booked \u2192 scheduled",avgDays==null?"\u2014":avgDays.toFixed(1)],["Total opportunity value (pipeline, excl. closed won)",gbp(totalOpp)],["Closed won",gbp(wonVal)+" ("+won.length+" signed)"]])+'</div></div>';
+  const pillarRows=PILLAR_KEYS.filter(k=>pc[k]>0).map(k=>[PILLARS[k].label,pc[k]+" \u00b7 "+(totP?Math.round(pc[k]/totP*100):0)+"%"]);
+  body+='<div class="p-section"><h3>Bookings by pillar</h3><div class="p-rows">'+(pillarRows.length?rowsHTML(pillarRows):'<div style="color:#888;font-size:12px">No pillars recorded</div>')+'</div></div>';
+  const statRows=REPORT_STATUSES.filter(s=>byStat[s]).map(s=>[(s==="Contract Signed"?"Closed won (Contract Signed)":s),gbp(byStat[s].v)+" ("+byStat[s].c+")"]);
+  body+='<div class="p-section"><h3>Opportunity value by status</h3><div class="p-rows">'+(statRows.length?rowsHTML(statRows):'<div style="color:#888;font-size:12px">Nothing at proposal stage or beyond</div>')+'</div></div>';
+  const tbl=(lbl,list)=>{const rows=list.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");return '<tr><td>'+esc(r.companyName||"\u2014")+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+esc(r.status||"Scheduled")+'</td></tr>'}).join("");return '<h3 style="font-size:13px;margin:18px 0 8px">'+lbl+' ('+list.length+')</h3><table class="p-list-table"><thead><tr><th>Company</th><th>Contact</th><th>AM</th><th>BDE</th><th>Pillar</th><th>Opp \u00a3</th><th>Status</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7">No bookings.</td></tr>')+'</tbody></table>'};
+  body+=tbl("Overall bookings",cohort);
+  body+=tbl("Proposals & contracts",cohort.filter(r=>REPORT_STATUSES.includes(r.status)));
+  body+='</div>';
+  printHTML(body,"CloudClevr Reporting "+plabel);
+}
+
 function metric(label,sub,val,black){return '<div class="metric'+(black?' accent-black':'')+'"><div class="m-label">'+esc(label)+'</div><div class="m-val">'+esc(val)+'</div><div class="m-sub">'+esc(sub)+'</div></div>'}
 function pieSVG(c,total){const size=170,r=78,cx=85,cy=85;if(!total)return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'"><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="#F0F0F0"/></svg>';let ang=-Math.PI/2,paths="";PILLAR_KEYS.forEach(k=>{const v=c[k];if(!v)return;const slice=v/total*Math.PI*2,a2=ang+slice,x1=cx+r*Math.cos(ang),y1=cy+r*Math.sin(ang),x2=cx+r*Math.cos(a2),y2=cy+r*Math.sin(a2),large=slice>Math.PI?1:0;if(v===total)paths+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+PILLARS[k].accent+'"/>';else paths+='<path d="M'+cx+' '+cy+' L'+x1.toFixed(2)+' '+y1.toFixed(2)+' A'+r+' '+r+' 0 '+large+' 1 '+x2.toFixed(2)+' '+y2.toFixed(2)+' Z" fill="'+PILLARS[k].accent+'"/>';ang=a2});return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+paths+'<circle cx="'+cx+'" cy="'+cy+'" r="40" fill="#fff"/><text x="'+cx+'" y="'+(cy-2)+'" text-anchor="middle" font-size="21" font-weight="800" fill="#161616">'+total+'</text><text x="'+cx+'" y="'+(cy+14)+'" text-anchor="middle" font-size="9.5" fill="#6B6F6C">selections</text></svg>'}
 function pieLegend(c,total){const rows=PILLAR_KEYS.filter(k=>c[k]>0).map(k=>{const v=c[k],pct=total?Math.round(v/total*100):0;return '<div class="legend-row"><span class="sw" style="background:'+PILLARS[k].accent+'">'+pillarIcon(k,9)+'</span><span class="lg-name">'+esc(PILLARS[k].label)+'</span><span class="lg-val">'+v+' · '+pct+'%</span></div>'}).join("");return '<div class="legend">'+(rows||'<div style="color:var(--muted);font-size:13px">No pillars recorded.</div>')+'</div>'}
@@ -745,16 +810,20 @@ function showLogin(b){$("#auth-overlay").style.display=b?"flex":"none"}
 async function boot(){
   try{sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)}
   catch(e){$("#login-err").textContent="Could not initialise Supabase.";return}
-  sb.auth.onAuthStateChange((ev,session)=>handleAuth(session));
+  sb.auth.onAuthStateChange((ev,session)=>{setTimeout(()=>handleAuth(session),0)});
 }
+let AUTH_BUSY=false;
 async function handleAuth(session){
   SESSION=session;
   if(!session){ME=null;BOOKINGS=[];O2O_ROWS=[];PROFILES=[];VIEW_USER="all";$("#appbar-user").style.display="none";showLogin(true);return}
   if(ME&&ME.id===session.user.id){showLogin(false);return}
+  if(AUTH_BUSY)return;AUTH_BUSY=true;
   showLogin(false);
-  await loadAllData();
-  setupUserUI();
-  rebuildFilters();renderTable();
+  $("#appbar-user").style.display="flex";
+  try{await loadAllData();}catch(e){toast("Could not load your data - please refresh");}
+  AUTH_BUSY=false;
+  if(ME){setupUserUI();rebuildFilters();renderTable();}
+  else{showLogin(true);}
 }
 async function loadAllData(){
   const uid=SESSION.user.id;let prof=null;
@@ -833,7 +902,9 @@ function init(){
   $("#clear-filters").addEventListener("click",()=>{filterStatus="all";filterMM="all";filterBM="all";page=1;rebuildFilters();renderTable();closeMenus()});
   $("#thead-row").addEventListener("click",e=>{const th=e.target.closest(".th-sort");if(!th)return;const k=th.dataset.sort;if(sortKey===k)sortDir=sortDir==="asc"?"desc":"asc";else{sortKey=k;sortDir="asc"}page=1;renderTable()});
   $("#pager").addEventListener("click",e=>{const b=e.target.closest(".pager-btn");if(!b||b.disabled)return;const p=parseInt(b.dataset.page,10);if(!isNaN(p)){page=p;renderTable()}});
-  $("#rep-month").addEventListener("change",renderReport);
+  $("#rep-type").addEventListener("change",()=>{buildReportPeriods();renderReport()});
+  $("#rep-period").addEventListener("change",renderReport);
+  $("#rep-pdf").addEventListener("click",exportReport);
   build121();
   $("#o2o-month").value=new Date().toISOString().slice(0,7);
   $("#o2o-month").addEventListener("change",render121);
