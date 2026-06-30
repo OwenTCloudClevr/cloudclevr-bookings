@@ -177,6 +177,7 @@
   .rep-tab.active{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
   .st-pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
   .nli-reason{margin-top:4px;font-size:11.5px;color:var(--muted);font-style:italic;white-space:normal;max-width:240px;margin-left:auto}
+  .dup-chip{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:700;background:#FBEFD6;color:#7A5A12;vertical-align:middle}
   .rep-pdf-btn{padding:9px 14px;border:0;border-radius:9px;background:#111;color:#fff;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
   .rep-pdf-btn:hover{background:#000}
   .legend{display:flex;flex-direction:column;gap:9px;flex:1;min-width:150px}
@@ -694,9 +695,25 @@ function buildReportPeriods(){
   sel.innerHTML=keys.map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+esc(periodLabelOf(t,k))+'</option>').join("");
 }
 function buildReportMonths(){buildReportPeriods()}
+const STATUS_RANK={"Scheduled":1,"Cancelled":1,"No Longer Interested":1,"Confirmed":2,"Sat Unqualified":3,"Sat Qualified":5,"Proposal Sent":6,"Contract Sent":7,"Contract Signed":8};
+function normCompany(s){return String(s||"").toLowerCase().replace(/['\u2019]/g,"").replace(/&/g," and ").replace(/[^a-z0-9 ]+/g," ").replace(/\b(ltd|limited|llp|llc|plc|inc|co|company|group|holdings|services|service|solutions|uk|the)\b/g," ").replace(/\s+/g," ").trim()}
+function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;const d=Array.from({length:m+1},(_,i)=>[i].concat(new Array(n).fill(0)));for(let j=0;j<=n;j++)d[0][j]=j;for(let i=1;i<=m;i++)for(let j=1;j<=n;j++){const c=a[i-1]===b[j-1]?0:1;d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+c)}return d[m][n]}
+function simRatio(a,b){const m=Math.max(a.length,b.length);return m?1-lev(a,b)/m:1}
+function sameCompany(an,bn){const na=normCompany(an),nb=normCompany(bn);if(!na||!nb)return false;if(na===nb)return true;const ta=na.split(" ").filter(Boolean),tb=nb.split(" ").filter(Boolean);if(Math.min(ta.length,tb.length)>=2){const sa=new Set(ta),sb=new Set(tb);if(ta.every(t=>sb.has(t))||tb.every(t=>sa.has(t)))return true}return simRatio(na.replace(/ /g,""),nb.replace(/ /g,""))>=0.9}
+function mergeGroup(group){
+  const base=group.slice().sort((a,b)=>(STATUS_RANK[b.status||"Scheduled"]||0)-(STATUS_RANK[a.status||"Scheduled"]||0)||((Number(b.opportunityValue)||0)-(Number(a.opportunityValue)||0))||((b.updatedAt||"")>(a.updatedAt||"")?1:-1))[0];
+  const merged=Object.assign({},base);
+  const maxv=Math.max(0,...group.map(r=>Number(r.opportunityValue)||0));merged.opportunityValue=maxv||"";
+  const po=[],pillars={};group.forEach(r=>(r.pillarOrder||Object.keys(r.pillars||{})).forEach(k=>{if(!pillars[k]){pillars[k]=r.pillars[k];po.push(k)}}));merged.pillars=pillars;merged.pillarOrder=po;
+  if(!merged.nliReason){const w=group.find(r=>r.nliReason);if(w)merged.nliReason=w.nliReason}
+  merged._dupCount=group.length;merged._dupBy=[...new Set(group.map(r=>r.bde).filter(Boolean))];
+  return merged;
+}
+function dedupeByCompany(list){const groups=[];list.forEach(r=>{const g=groups.find(grp=>sameCompany(grp[0].companyName,r.companyName));if(g)g.push(r);else groups.push([r])});return groups.map(mergeGroup)}
 function computeReport(){
   const t=$("#rep-type").value,pk=$("#rep-period").value;if(!pk)return null;
-  const cohort=scopedBookings().filter(r=>periodKeyOf(r)===pk),n=cohort.length;
+  const cohortRaw=scopedBookings().filter(r=>periodKeyOf(r)===pk);
+  const cohort=dedupeByCompany(cohortRaw),n=cohort.length,dupRemoved=cohortRaw.length-cohort.length;
   let dsum=0,dc=0;cohort.forEach(r=>{if(r.dateBooked&&r.meetingDate){const days=(new Date(r.meetingDate)-new Date(r.dateBooked))/86400000;if(!isNaN(days)){dsum+=days;dc++}}});
   const avgDays=dc?dsum/dc:null;
   const today=new Date();today.setHours(23,59,59,999);
@@ -708,25 +725,26 @@ function computeReport(){
   const pc={};PILLAR_KEYS.forEach(k=>pc[k]=0);cohort.forEach(r=>(r.pillarOrder||Object.keys(r.pillars||{})).forEach(k=>{if(pc[k]!=null)pc[k]++}));const totP=Object.values(pc).reduce((a,b)=>a+b,0);
   const byStat={};cohort.forEach(r=>{const s=r.status||"Scheduled";if(!byStat[s])byStat[s]={c:0,v:0};byStat[s].c++;byStat[s].v+=Number(r.opportunityValue)||0});
   const repOpp=REPORT_STATUSES.reduce((a,s)=>a+(byStat[s]?byStat[s].v:0),0);
-  return {t,pk,plabel:periodLabelOf(t,pk),cohort,n,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp};
+  return {t,pk,plabel:periodLabelOf(t,pk),cohort,n,dupRemoved,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp};
 }
 function statusPill(s){const sc=STATUS_COLOR[s||"Scheduled"]||["#eee","#555"];return '<span class="st-pill" style="background:'+sc[0]+';color:'+sc[1]+'">'+esc(s||"Scheduled")+'</span>'}
 function repSummaryRows(cohort,tab){
   const list=tab==="pipeline"?cohort.filter(r=>REPORT_STATUSES.includes(r.status)):cohort;
   if(!list.length)return '<tr><td colspan="7" style="color:var(--muted)">No bookings.</td></tr>';
-  return list.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");const rsn=(r.status==="No Longer Interested"&&r.nliReason)?'<div class="nli-reason">'+esc(r.nliReason)+'</div>':"";return '<tr><td>'+esc(r.companyName||"\u2014")+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+statusPill(r.status)+rsn+'</td></tr>'}).join("");
+  return list.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");const rsn=(r.status==="No Longer Interested"&&r.nliReason)?'<div class="nli-reason">'+esc(r.nliReason)+'</div>':"";const dup=r._dupCount>1?' <span class="dup-chip" title="'+esc((r._dupBy||[]).join(", "))+'">merged \u00d7'+r._dupCount+'</span>':"";return '<tr><td>'+esc(r.companyName||"\u2014")+dup+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+statusPill(r.status)+rsn+'</td></tr>'}).join("");
 }
 function setRepStatus(v){repStatusFilter=v;renderReport()}
 function setSumTab(v){repSumTab=v;renderReport()}
 function renderReport(){const host=$("#report-body");const R=computeReport();
   if(!R){host.innerHTML='<div class="empty"><div class="ico">'+svg('<path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>',22).replace('stroke="currentColor"','stroke="#2FA221"')+'</div><h3>No data to report</h3><p>Save some bookings and they will appear here, grouped by when they were booked.</p></div>';return}
-  const {t,pk,plabel,cohort,n,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp}=R;
+  const {t,pk,plabel,cohort,n,dupRemoved,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp}=R;
+  const dupNote=dupRemoved?" \u00b7 "+dupRemoved+" duplicate"+(dupRemoved===1?"":"s")+" merged":"";
   const statusesToShow=repStatusFilter==="all"?REPORT_STATUSES:[repStatusFilter];
   const maxV=Math.max(1,...statusesToShow.map(s=>byStat[s]?byStat[s].v:0));
   const brkRows=statusesToShow.filter(s=>byStat[s]).map(s=>{const o=byStat[s],sc=STATUS_COLOR[s],nm=s==="Contract Signed"?"Closed won (Contract Signed)":s;return '<div class="brk-row"><div class="brk-name"><span style="color:'+sc[1]+';display:grid;place-items:center">'+statusIcon(s,15)+'</span>'+esc(nm)+'</div><div class="brk-bar"><span style="width:'+(o.v/maxV*100)+'%"></span></div><div class="brk-val">'+gbp(o.v)+' <small>('+o.c+')</small></div></div>'}).join("");
   const statusOpts=['all'].concat(REPORT_STATUSES).map(s=>'<option value="'+s+'"'+(repStatusFilter===s?' selected':'')+'>'+(s==="all"?"All statuses":esc(s))+'</option>').join("");
   host.innerHTML='<div class="metric-grid">'+
-      metric("Bookings","Booked in "+plabel,n,false)+
+      metric("Bookings","Booked in "+plabel+dupNote,n,false)+
       metric("Sit rate (to date)",dueN?sitCount+" sat-qualified of "+dueN+" held \u00b7 future excluded":"No meetings held yet",dueN?sitRate+"%":"\u2014",false)+
       metric("Avg days booked \u2192 scheduled",avgDays==null?"No dated pairs":"Calendar days",avgDays==null?"\u2014":avgDays.toFixed(1),false)+
       metric("Total opportunity value","Pipeline only \u00b7 excludes closed won"+(valued?" \u00b7 "+gbp(Math.round(avgOpp))+" avg":""),gbp(totalOpp),false)+
@@ -737,21 +755,21 @@ function renderReport(){const host=$("#report-body");const R=computeReport();
       '<div class="card-pad"><div class="card-head-row"><h3>Opportunity value by status</h3><select class="mini-select" onchange="setRepStatus(this.value)">'+statusOpts+'</select></div><p class="sub">'+(repOpp?gbp(repOpp)+" across proposals, contracts and closed won":"Nothing at proposal stage or beyond yet")+'</p>'+(brkRows||'<div style="color:var(--muted);font-size:13px;padding:8px 0">Nothing to show for this status.</div>')+'</div>'+
     '</div>'+
     '<div class="card-pad" style="margin-top:16px"><div class="card-head-row"><h3>Booking summary</h3><div class="rep-tabs"><button class="rep-tab'+(repSumTab==="all"?" active":"")+'" onclick="setSumTab(&quot;all&quot;)">Overall bookings</button><button class="rep-tab'+(repSumTab==="pipeline"?" active":"")+'" onclick="setSumTab(&quot;pipeline&quot;)">Proposals &amp; contracts</button></div></div>'+
-      '<p class="sub">'+(repSumTab==="pipeline"?"Bookings at proposal, contract or closed won":n+" booking"+(n===1?"":"s")+" booked in "+plabel)+'</p>'+
+      '<p class="sub">'+(repSumTab==="pipeline"?"Bookings at proposal, contract or closed won":n+" unique compan"+(n===1?"y":"ies")+" booked in "+plabel+dupNote)+'</p>'+
       '<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Company</th><th>Contact</th><th>Specialist / AM</th><th>Booked By</th><th>Pillar</th><th>Opp Value</th><th>Status</th></tr></thead><tbody>'+repSummaryRows(cohort,repSumTab)+'</tbody></table></div></div>';
 }
 function exportReport(){
   const R=computeReport();if(!R){toast("Nothing to report yet");return}
-  const {t,plabel,cohort,n,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp}=R;
+  const {t,plabel,cohort,n,dupRemoved,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp}=R;
   const typeLabel=t==="month"?"Month":t==="quarter"?"Quarter":"Year";
   let body='<div class="p-sheet">'+pdfHead("CloudClevr Reporting");
-  body+='<p class="p-co">Reporting \u2014 '+esc(plabel)+'</p><p class="p-sub">'+typeLabel+' view \u00b7 '+esc(repScopeLabel())+' \u00b7 '+n+' booking'+(n===1?"":"s")+'</p>';
+  body+='<p class="p-co">Reporting \u2014 '+esc(plabel)+'</p><p class="p-sub">'+typeLabel+' view \u00b7 '+esc(repScopeLabel())+' \u00b7 '+n+' unique compan'+(n===1?"y":"ies")+(dupRemoved?" \u00b7 "+dupRemoved+" duplicate"+(dupRemoved===1?"":"s")+" merged":"")+'</p>';
   body+='<div class="p-section"><h3>Headline figures</h3><div class="p-rows">'+rowsHTML([["Bookings",n],["Sit rate (to date)",dueN?sitRate+"% ("+sitCount+" of "+dueN+" held)":"\u2014"],["Avg days booked \u2192 scheduled",avgDays==null?"\u2014":avgDays.toFixed(1)],["Total opportunity value (pipeline, excl. closed won)",gbp(totalOpp)],["Closed won",gbp(wonVal)+" ("+won.length+" signed)"]])+'</div></div>';
   const pillarRows=PILLAR_KEYS.filter(k=>pc[k]>0).map(k=>[PILLARS[k].label,pc[k]+" \u00b7 "+(totP?Math.round(pc[k]/totP*100):0)+"%"]);
   body+='<div class="p-section"><h3>Bookings by pillar</h3><div class="p-rows">'+(pillarRows.length?rowsHTML(pillarRows):'<div style="color:#888;font-size:12px">No pillars recorded</div>')+'</div></div>';
   const statRows=REPORT_STATUSES.filter(s=>byStat[s]).map(s=>[(s==="Contract Signed"?"Closed won (Contract Signed)":s),gbp(byStat[s].v)+" ("+byStat[s].c+")"]);
   body+='<div class="p-section"><h3>Opportunity value by status</h3><div class="p-rows">'+(statRows.length?rowsHTML(statRows):'<div style="color:#888;font-size:12px">Nothing at proposal stage or beyond</div>')+'</div></div>';
-  const tbl=(lbl,list)=>{const rows=list.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");const stx=esc(r.status||"Scheduled")+((r.status==="No Longer Interested"&&r.nliReason)?' \u2014 '+esc(r.nliReason):"");return '<tr><td>'+esc(r.companyName||"\u2014")+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+stx+'</td></tr>'}).join("");return '<h3 style="font-size:13px;margin:18px 0 8px">'+lbl+' ('+list.length+')</h3><table class="p-list-table"><thead><tr><th>Company</th><th>Contact</th><th>Specialist/AM</th><th>Booked By</th><th>Pillar</th><th>Opp \u00a3</th><th>Status</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7">No bookings.</td></tr>')+'</tbody></table>'};
+  const tbl=(lbl,list)=>{const rows=list.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");const stx=esc(r.status||"Scheduled")+((r.status==="No Longer Interested"&&r.nliReason)?' \u2014 '+esc(r.nliReason):"");const cn=esc(r.companyName||"\u2014")+(r._dupCount>1?' (merged \u00d7'+r._dupCount+')':"");return '<tr><td>'+cn+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+stx+'</td></tr>'}).join("");return '<h3 style="font-size:13px;margin:18px 0 8px">'+lbl+' ('+list.length+')</h3><table class="p-list-table"><thead><tr><th>Company</th><th>Contact</th><th>Specialist/AM</th><th>Booked By</th><th>Pillar</th><th>Opp \u00a3</th><th>Status</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7">No bookings.</td></tr>')+'</tbody></table>'};
   body+=tbl("Overall bookings",cohort);
   body+=tbl("Proposals & contracts",cohort.filter(r=>REPORT_STATUSES.includes(r.status)));
   body+='</div>';
