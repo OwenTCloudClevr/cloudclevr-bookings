@@ -571,7 +571,16 @@ function persist(l){BOOKINGS=l}
 function bookingsForUser(uid){return uid==="all"?BOOKINGS:BOOKINGS.filter(b=>b._uid===uid)}
 function ownerRole(r){const uid=r._uid||r.user_id;const p=PROFILES.find(x=>x.id===uid);return p&&p.role?String(p.role).toUpperCase():""}
 function scopedBookings(){let list=(ME&&ME.is_admin&&VIEW_USER!=="all")?BOOKINGS.filter(b=>b._uid===VIEW_USER):BOOKINGS;if(ME&&ME.is_admin&&VIEW_ROLE!=="all")list=list.filter(b=>ownerRole(b)===VIEW_ROLE);return list}
-async function sbUpsertBooking(rec,quiet){if(!sb||!ME)return;const owner=rec._uid||ME.id;const clean=Object.assign({},rec);delete clean._uid;const row={id:rec.id,user_id:owner,data:clean,updated_at:new Date().toISOString()};if(owner!==ME.id)row.created_by=ME.id;const{error}=await sb.from("bookings").upsert(row);if(error){toast(quiet?("Could not create copy: "+error.message):("Save failed: "+error.message));return false}return true}
+async function sbUpsertBooking(rec,isNewCopy){if(!sb||!ME)return;
+  const owner=rec._uid||ME.id;const clean=Object.assign({},rec);delete clean._uid;
+  const row={id:rec.id,user_id:owner,data:clean,updated_at:new Date().toISOString()};
+  if(owner!==ME.id)row.created_by=ME.id;
+  /* A copy for someone else is a fresh INSERT. Upsert would also have to satisfy the
+     UPDATE policy, which only allows rows you own, so it is refused by RLS. */
+  const q=isNewCopy?sb.from("bookings").insert(row):sb.from("bookings").upsert(row);
+  const{error}=await q;
+  if(error){toast(isNewCopy?("Could not create copy: "+error.message):("Save failed: "+error.message));return false}
+  return true}
 async function sbDeleteBooking(id){if(!sb)return;const{error}=await sb.from("bookings").delete().eq("id",id);if(error)toast("Delete failed: "+error.message)}
 function loadCols(){try{return JSON.parse(localStorage.getItem(COLS_KEY))}catch(e){return null}}
 function persistCols(){localStorage.setItem(COLS_KEY,JSON.stringify(visibleCols))}
