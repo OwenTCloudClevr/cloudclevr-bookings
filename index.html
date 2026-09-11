@@ -182,6 +182,13 @@
   .cell-am{width:100%;padding:6px 8px;border:1px solid transparent;border-radius:7px;background:transparent;font-family:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
   .cell-am:hover{border-color:var(--line);background:#fff}
   .copy-chip{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:700;background:#E2ECFB;color:#2A4E86;vertical-align:middle}
+  .ss-wrap{margin:10px 0 14px}
+  .ss-bar{display:flex;height:10px;border-radius:999px;overflow:hidden;background:var(--grey)}
+  .ss-seg{display:block;height:100%}
+  .ss-keys{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:12px;color:var(--muted)}
+  .ss-key{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .ss-key strong{color:var(--ink);font-weight:700}
+  .ss-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
   .dup-chip{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:700;background:#FBEFD6;color:#7A5A12;vertical-align:middle}
   .rep-pdf-btn{padding:9px 14px;border:0;border-radius:9px;background:#111;color:#fff;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
   .rep-pdf-btn:hover{background:#000}
@@ -319,6 +326,7 @@
           <label class="pop-lbl">Status</label><select id="f-status"></select>
           <label class="pop-lbl">Meeting month</label><select id="f-mmonth"></select>
           <label class="pop-lbl">Booked month</label><select id="f-bmonth"></select>
+          <label class="pop-lbl">BDM / Specialist</label><select id="f-am"></select>
           <label class="pop-lbl">ICP fit</label><select id="f-icp"><option value="all">All</option><option value="ICP">ICP only</option><option value="Non-ICP">Non-ICP only</option></select>
           <button class="pop-clear" id="clear-filters">Clear filters</button>
         </div>
@@ -344,6 +352,7 @@
         <label for="rep-type">Period</label>
         <select id="rep-type"><option value="month">Month</option><option value="quarter">Quarter</option><option value="year">Year</option></select>
         <select id="rep-period"></select>
+        <select id="rep-am"></select>
         <button class="rep-pdf-btn" id="rep-pdf">Download PDF</button>
       </div>
     </div>
@@ -558,7 +567,7 @@ const STORE_KEY="cloudclevr_bookings_v2",COLS_KEY="cloudclevr_cols_v2";
 
 /* ---------- State ---------- */
 let editingId=null,selected={};PILLAR_KEYS.forEach(k=>selected[k]=false);
-let filterStatus="all",filterMM="all",filterBM="all",filterICP="all",visibleCols={};
+let filterStatus="all",filterMM="all",filterBM="all",filterICP="all",filterAM="all",visibleCols={};
 let page=1,sortKey="meeting",sortDir="asc";const PAGE_SIZE=10;
 
 /* ---------- Helpers ---------- */
@@ -627,8 +636,15 @@ function toggleAddress(){$("#address-field").style.display=getVal("meetingType")
 function handleSave(){const missing=!getVal("companyName")||!getVal("contactName")||!getVal("meetingDate")||!getVal("accountManager");$("#req-banner").classList.toggle("show",missing);if(missing){$(".modal-body").scrollTop=0;return}const rec=collectForm(),list=load(),i=list.findIndex(r=>r.id===rec.id),editing=i>=0;let saved;if(editing){saved=Object.assign({},list[i],rec);list[i]=saved}else{rec.createdAt=new Date().toISOString();rec._uid=ME?ME.id:null;saved=rec;list.push(rec)}persist(list);sbUpsertBooking(saved);closeModal();rebuildFilters();renderTable();toast(editing?"Booking updated":"Booking saved");maybeAssignToBDM(saved.id)}
 
 /* ---------- Filters ---------- */
-function rebuildFilters(){const list=load();$("#f-status").innerHTML='<option value="all">All statuses</option>'+STATUSES.map(s=>'<option'+(filterStatus===s?' selected':'')+'>'+esc(s)+'</option>').join("");const mm=new Set(),bm=new Set();list.forEach(r=>{const a=monthKey(r.meetingDate);if(a)mm.add(a);const b=monthKey(r.dateBooked);if(b)bm.add(b)});const mma=[...mm].sort().reverse(),bma=[...bm].sort().reverse();$("#f-mmonth").innerHTML='<option value="all">All meeting months</option>'+mma.map(k=>'<option value="'+k+'"'+(filterMM===k?' selected':'')+'>'+monthLabel(k)+'</option>').join("");$("#f-bmonth").innerHTML='<option value="all">All booked months</option>'+bma.map(k=>'<option value="'+k+'"'+(filterBM===k?' selected':'')+'>'+monthLabel(k)+'</option>').join("");$("#f-icp").value=filterICP;updateFilterBadge()}
-function updateFilterBadge(){const n=(filterStatus!=="all")+(filterMM!=="all")+(filterBM!=="all")+(filterICP!=="all");const b=$("#filter-badge");b.style.display=n?"grid":"none";b.textContent=n;$("#filter-btn").classList.toggle("active-f",!!n)}
+function rebuildFilters(){const list=load();$("#f-status").innerHTML='<option value="all">All statuses</option>'+STATUSES.map(s=>'<option'+(filterStatus===s?' selected':'')+'>'+esc(s)+'</option>').join("");const mm=new Set(),bm=new Set();list.forEach(r=>{const a=monthKey(r.meetingDate);if(a)mm.add(a);const b=monthKey(r.dateBooked);if(b)bm.add(b)});const mma=[...mm].sort().reverse(),bma=[...bm].sort().reverse();$("#f-mmonth").innerHTML='<option value="all">All meeting months</option>'+mma.map(k=>'<option value="'+k+'"'+(filterMM===k?' selected':'')+'>'+monthLabel(k)+'</option>').join("");$("#f-bmonth").innerHTML='<option value="all">All booked months</option>'+bma.map(k=>'<option value="'+k+'"'+(filterBM===k?' selected':'')+'>'+monthLabel(k)+'</option>').join("");const ams=new Set();list.forEach(r=>{const v=String(r.accountManager||"").trim();if(v)ams.add(v)});
+  const known=AM_LIST.map(a=>a.name).filter(n=>ams.has(n));
+  const other=[...ams].filter(n=>!AM_LIST.some(a=>a.name===n)).sort();
+  const opt=n=>'<option value="'+esc(n)+'"'+(filterAM===n?' selected':'')+'>'+esc(n)+'</option>';
+  $("#f-am").innerHTML='<option value="all">All BDMs / Specialists</option>'+
+    (known.length?'<optgroup label="Specialists">'+known.filter(n=>!isBDM(n)).map(opt).join("")+'</optgroup><optgroup label="BDMs">'+known.filter(isBDM).map(opt).join("")+'</optgroup>':"")+
+    (other.length?'<optgroup label="Other">'+other.map(opt).join("")+'</optgroup>':"");
+  $("#f-am").value=filterAM;$("#f-icp").value=filterICP;updateFilterBadge()}
+function updateFilterBadge(){const n=(filterStatus!=="all")+(filterMM!=="all")+(filterBM!=="all")+(filterICP!=="all")+(filterAM!=="all");const b=$("#filter-badge");b.style.display=n?"grid":"none";b.textContent=n;$("#filter-btn").classList.toggle("active-f",!!n)}
 function sortVal(r,key){switch(key){
   case"company":return (r.companyName||"").toLowerCase();
   case"contact":return (r.contactName||"").toLowerCase();
@@ -643,7 +659,7 @@ function sortVal(r,key){switch(key){
   case"icp":return r.icp==="ICP"?1:0;
   case"opportunityValue":return Number(r.opportunityValue)||0;
   default:return 0}}
-function getFiltered(){const q=$("#search").value.trim().toLowerCase();let list=scopedBookings();if(filterStatus!=="all")list=list.filter(r=>(r.status||"Scheduled")===filterStatus);if(filterMM!=="all")list=list.filter(r=>monthKey(r.meetingDate)===filterMM);if(filterBM!=="all")list=list.filter(r=>monthKey(r.dateBooked)===filterBM);if(filterICP!=="all")list=list.filter(r=>(r.icp||"Non-ICP")===filterICP);if(q)list=list.filter(r=>[r.companyName,r.contactName,r.accountManager,r.phone,r.bde].some(v=>(v||"").toLowerCase().includes(q)));const dir=sortDir==="asc"?1:-1;list.sort((a,b)=>{const va=sortVal(a,sortKey),vb=sortVal(b,sortKey);if(va<vb)return -dir;if(va>vb)return dir;return 0});return list}
+function getFiltered(){const q=$("#search").value.trim().toLowerCase();let list=scopedBookings();if(filterStatus!=="all")list=list.filter(r=>(r.status||"Scheduled")===filterStatus);if(filterMM!=="all")list=list.filter(r=>monthKey(r.meetingDate)===filterMM);if(filterBM!=="all")list=list.filter(r=>monthKey(r.dateBooked)===filterBM);if(filterICP!=="all")list=list.filter(r=>(r.icp||"Non-ICP")===filterICP);if(filterAM!=="all")list=list.filter(r=>String(r.accountManager||"").trim()===filterAM);if(q)list=list.filter(r=>[r.companyName,r.contactName,r.accountManager,r.phone,r.bde].some(v=>(v||"").toLowerCase().includes(q)));const dir=sortDir==="asc"?1:-1;list.sort((a,b)=>{const va=sortVal(a,sortKey),vb=sortVal(b,sortKey);if(va<vb)return -dir;if(va>vb)return dir;return 0});return list}
 
 /* ---------- Columns ---------- */
 function buildColMenu(){const m=$("#col-menu");m.innerHTML=COLS.filter(c=>!c.always).map(c=>'<label><input type="checkbox" data-col="'+c.key+'"'+(visibleCols[c.key]?' checked':'')+'>'+esc(c.label)+'</label>').join("");$$("input[data-col]",m).forEach(cb=>cb.addEventListener("change",()=>{visibleCols[cb.dataset.col]=cb.checked;persistCols();renderTable()}))}
@@ -755,7 +771,7 @@ function exportList(){const list=getFiltered();if(!list.length){toast("Nothing t
 function printHTML(html,title,landscape){$("#print-root").innerHTML=html;const old=document.title;document.title=title;let st=null;if(landscape){st=document.createElement("style");st.id="print-orient";st.textContent="@media print{@page{size:A4 landscape;margin:10mm}}";document.head.appendChild(st)}window.print();setTimeout(()=>{document.title=old;if(st&&st.parentNode)st.parentNode.removeChild(st)},600)}
 
 /* ---------- Reports ---------- */
-let repStatusFilter="all",repSumTab="all";
+let repStatusFilter="all",repSumTab="all",repAM="all";
 function qOf(m){return Math.floor(m/3)+1}
 function quarterKey(v){if(!v)return null;const d=new Date(v);if(isNaN(d))return null;return d.getFullYear()+"-Q"+qOf(d.getMonth())}
 function quarterLabel(k){const a=k.split("-Q"),q=+a[1],mm=[["Jan","Mar"],["Apr","Jun"],["Jul","Sep"],["Oct","Dec"]][q-1];return "Q"+q+" "+a[0]+" ("+mm[0]+"\u2013"+mm[1]+")"}
@@ -763,7 +779,7 @@ function yearKey(v){if(!v)return null;const d=new Date(v);if(isNaN(d))return nul
 function periodKeyOf(r){const t=$("#rep-type").value;return t==="month"?monthKey(r.dateBooked):t==="quarter"?quarterKey(r.dateBooked):yearKey(r.dateBooked)}
 function periodKeyOfDate(v){const t=$("#rep-type").value;return t==="month"?monthKey(v):t==="quarter"?quarterKey(v):yearKey(v)}
 function periodLabelOf(t,k){return t==="month"?monthLabel(k):t==="quarter"?quarterLabel(k):k}
-function repScopeLabel(){if(ME&&ME.is_admin&&VIEW_USER!=="all"){const p=PROFILES.find(x=>x.id===VIEW_USER);return p?(p.full_name||p.email):"Selected user"}return "All team"}
+function repScopeLabel(){if(repAM!=="all")return repAM;if(ME&&ME.is_admin&&VIEW_USER!=="all"){const p=PROFILES.find(x=>x.id===VIEW_USER);return p?(p.full_name||p.email):"Selected user"}return "All team"}
 function buildReportPeriods(){
   const t=$("#rep-type").value,sel=$("#rep-period"),set=new Set();
   scopedBookings().forEach(r=>{const k=t==="month"?monthKey(r.dateBooked):t==="quarter"?quarterKey(r.dateBooked):yearKey(r.dateBooked);if(k)set.add(k)});
@@ -772,16 +788,36 @@ function buildReportPeriods(){
   const cur=sel.value&&keys.includes(sel.value)?sel.value:keys[0];
   sel.innerHTML=keys.map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+esc(periodLabelOf(t,k))+'</option>').join("");
 }
-function buildReportMonths(){buildReportPeriods()}
+function buildReportAMs(){
+  const ams=new Set();scopedBookings().forEach(r=>{const v=String(r.accountManager||"").trim();if(v)ams.add(v)});
+  const known=AM_LIST.map(a=>a.name).filter(n=>ams.has(n));
+  const other=[...ams].filter(n=>!AM_LIST.some(a=>a.name===n)).sort();
+  const opt=n=>'<option value="'+esc(n)+'"'+(repAM===n?' selected':'')+'>'+esc(n)+'</option>';
+  const sel=$("#rep-am");if(!sel)return;
+  sel.innerHTML='<option value="all">All BDMs / Specialists</option>'+
+    (known.length?'<optgroup label="Specialists">'+known.filter(n=>!isBDM(n)).map(opt).join("")+'</optgroup><optgroup label="BDMs">'+known.filter(isBDM).map(opt).join("")+'</optgroup>':"")+
+    (other.length?'<optgroup label="Other">'+other.map(opt).join("")+'</optgroup>':"");
+  if([...sel.options].every(o=>o.value!==repAM))repAM="all";
+  sel.value=repAM;
+}
+function buildReportMonths(){buildReportPeriods();buildReportAMs()}
 const STATUS_RANK={"Scheduled":1,"Cancelled":1,"No-Show":1,"Closed Lost":2,"Confirmed":2,"Sat Unqualified Non-ICP":3,"Sat Qualified ICP":5,"Proposal Sent":6,"Closed Won":8};
 function normCompany(s){return String(s||"").toLowerCase().replace(/['\u2019]/g,"").replace(/&/g," and ").replace(/[^a-z0-9 ]+/g," ").replace(/\b(ltd|limited|llp|llc|plc|inc|co|company|group|holdings|services|service|solutions|uk|the)\b/g," ").replace(/\s+/g," ").trim()}
 function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;const d=Array.from({length:m+1},(_,i)=>[i].concat(new Array(n).fill(0)));for(let j=0;j<=n;j++)d[0][j]=j;for(let i=1;i<=m;i++)for(let j=1;j<=n;j++){const c=a[i-1]===b[j-1]?0:1;d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+c)}return d[m][n]}
 function simRatio(a,b){const m=Math.max(a.length,b.length);return m?1-lev(a,b)/m:1}
 function sameCompany(an,bn){const na=normCompany(an),nb=normCompany(bn);if(!na||!nb)return false;if(na===nb)return true;const ta=na.split(" ").filter(Boolean),tb=nb.split(" ").filter(Boolean);if(Math.min(ta.length,tb.length)>=2){const sa=new Set(ta),sb=new Set(tb);if(ta.every(t=>sb.has(t))||tb.every(t=>sa.has(t)))return true}return simRatio(na.replace(/ /g,""),nb.replace(/ /g,""))>=0.9}
+function isBdmRecord(r){return !!r._copyOf||isBDM(r.accountManager)&&!r._assignedFor}
 function mergeGroup(group){
-  const base=group.slice().sort((a,b)=>(STATUS_RANK[canon(b.status)]||0)-(STATUS_RANK[canon(a.status)]||0)||((Number(b.opportunityValue)||0)-(Number(a.opportunityValue)||0))||((b.updatedAt||"")>(a.updatedAt||"")?1:-1))[0];
-  const merged=Object.assign({},base);
-  const maxv=Math.max(0,...group.map(r=>Number(r.opportunityValue)||0));merged.opportunityValue=maxv||"";
+  /* The BDM owns the outcome: their copy wins on status, reason and value.
+     Only if no BDM record exists do we fall back to the most progressed booking. */
+  const bdm=group.filter(r=>r._copyOf);
+  const rank=(a,b)=>(STATUS_RANK[canon(b.status)]||0)-(STATUS_RANK[canon(a.status)]||0)||((Number(b.opportunityValue)||0)-(Number(a.opportunityValue)||0))||((b.updatedAt||"")>(a.updatedAt||"")?1:-1);
+  const outcomeFrom=(bdm.length?bdm.slice().sort(rank):group.slice().sort(rank))[0];
+  const details=group.slice().sort((a,b)=>((b.updatedAt||"")>(a.updatedAt||"")?1:-1))[0];
+  const merged=Object.assign({},details,{status:outcomeFrom.status,statusReason:outcomeFrom.statusReason||outcomeFrom.nliReason||outcomeFrom.unqualReason||"",accountManager:outcomeFrom.accountManager||details.accountManager});
+  merged._outcomeFromBdm=!!bdm.length;
+  const ov=Number(outcomeFrom.opportunityValue)||0;
+  merged.opportunityValue=ov||Math.max(0,...group.map(r=>Number(r.opportunityValue)||0))||"";
   const po=[],pillars={};group.forEach(r=>(r.pillarOrder||Object.keys(r.pillars||{})).forEach(k=>{if(!pillars[k]){pillars[k]=r.pillars[k];po.push(k)}}));merged.pillars=pillars;merged.pillarOrder=po;
   if(!merged.statusReason){const w=group.find(r=>r.statusReason||r.nliReason||r.unqualReason);if(w)merged.statusReason=w.statusReason||w.nliReason||w.unqualReason}
   if(!merged.icp||merged.icp==="Unknown"){const w3=group.find(r=>r.icp&&r.icp!=="Unknown");if(w3)merged.icp=w3.icp}
@@ -791,14 +827,15 @@ function mergeGroup(group){
 function dedupeByCompany(list){const groups=[];list.forEach(r=>{const g=groups.find(grp=>sameCompany(grp[0].companyName,r.companyName));if(g)g.push(r);else groups.push([r])});return groups.map(mergeGroup)}
 function computeReport(){
   const t=$("#rep-type").value,pk=$("#rep-period").value;if(!pk)return null;
-  const cohortRaw=scopedBookings().filter(r=>periodKeyOf(r)===pk);
+  const amOK=r=>repAM==="all"||String(r.accountManager||"").trim()===repAM;
+  const cohortRaw=scopedBookings().filter(r=>periodKeyOf(r)===pk&&amOK(r));
   const cohort=dedupeByCompany(cohortRaw),n=cohort.length,dupRemoved=cohortRaw.length-cohort.length;
   let dsum=0,dc=0;cohort.forEach(r=>{if(r.dateBooked&&r.meetingDate){const days=(new Date(r.meetingDate)-new Date(r.dateBooked))/86400000;if(!isNaN(days)){dsum+=days;dc++}}});
   const avgDays=dc?dsum/dc:null;
   const today=new Date();today.setHours(23,59,59,999);
   const due=cohort.filter(r=>{const d=r.meetingDate?new Date(r.meetingDate):null;return d&&!isNaN(d)&&d<=today});
   const dueN=due.length,sitCount=due.filter(r=>SIT_SET.has(canon(r.status))).length,sitRate=dueN?Math.round(sitCount/dueN*100):0;
-  const valueRaw=scopedBookings().filter(r=>{if(periodKeyOfDate(r.meetingDate)!==pk)return false;const d=r.meetingDate?new Date(r.meetingDate):null;return d&&!isNaN(d)&&d<=today});
+  const valueRaw=scopedBookings().filter(r=>{if(!amOK(r))return false;if(periodKeyOfDate(r.meetingDate)!==pk)return false;const d=r.meetingDate?new Date(r.meetingDate):null;return d&&!isNaN(d)&&d<=today});
   const valueCohort=dedupeByCompany(valueRaw);
   const won=valueCohort.filter(r=>canon(r.status)==="Closed Won"),wonVal=won.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0);
   const pipeline=valueCohort.filter(r=>canon(r.status)!=="Closed Won");
@@ -818,8 +855,17 @@ function computeReport(){
 }
 function reasonOf(r){return REASON_STATUSES[canon(r.status)]?(r.statusReason||r.unqualReason||r.nliReason||""):""}
 function statusPill(s){const c=canon(s),sc=STATUS_COLOR[c]||["#eee","#555"];return '<span class="st-pill" style="background:'+sc[0]+';color:'+sc[1]+'">'+esc(c)+'</span>'}
+function statusSplitHTML(list){
+  if(!list.length)return "";
+  const counts={};list.forEach(r=>{const c=canon(r.status);counts[c]=(counts[c]||0)+1});
+  const order=STATUSES.filter(s=>counts[s]);
+  const tot=list.length;
+  const seg=order.map(s=>{const sc=STATUS_COLOR[s]||["#ddd","#555"],pct=counts[s]/tot*100;return '<span class="ss-seg" style="width:'+pct+'%;background:'+sc[1]+'" title="'+esc(s)+' '+Math.round(pct)+'%"></span>'}).join("");
+  const keys=order.map(s=>{const sc=STATUS_COLOR[s]||["#ddd","#555"],pct=counts[s]/tot*100;return '<span class="ss-key"><span class="ss-dot" style="background:'+sc[1]+'"></span>'+esc(s)+' <strong>'+Math.round(pct)+'%</strong> <small>('+counts[s]+')</small></span>'}).join("");
+  return '<div class="ss-wrap"><div class="ss-bar">'+seg+'</div><div class="ss-keys">'+keys+'</div></div>';
+}
 function repSummaryRows(cohort,tab){
-  const list=tab==="pipeline"?cohort.filter(r=>REPORT_STATUSES.includes(r.status)):cohort;
+  const list=tab==="pipeline"?cohort.filter(r=>REPORT_STATUSES.includes(canon(r.status))):cohort;
   if(!list.length)return '<tr><td colspan="7" style="color:var(--muted)">No bookings.</td></tr>';
   return list.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");const rt=reasonOf(r);const rsn=rt?'<div class="nli-reason">'+esc(rt)+'</div>':"";const dup=r._dupCount>1?' <span class="dup-chip" title="'+esc((r._dupBy||[]).join(", "))+'">merged \u00d7'+r._dupCount+'</span>':"";return '<tr><td>'+esc(r.companyName||"\u2014")+dup+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+statusPill(r.status)+rsn+'</td></tr>'}).join("");
 }
@@ -850,7 +896,7 @@ function renderReport(){const host=$("#report-body");const R=computeReport();
       '</tbody></table></div></div>'+
     '<div class="card-pad" style="margin-top:16px"><div class="card-head-row"><h3>Booking summary</h3><div class="rep-tabs"><button class="rep-tab'+(repSumTab==="all"?" active":"")+'" onclick="setSumTab(&quot;all&quot;)">Overall bookings</button><button class="rep-tab'+(repSumTab==="pipeline"?" active":"")+'" onclick="setSumTab(&quot;pipeline&quot;)">Proposals &amp; contracts</button></div></div>'+
       '<p class="sub">'+(repSumTab==="pipeline"?"Proposals, contracts and closed won from meetings sat in "+plabel:n+" unique compan"+(n===1?"y":"ies")+" booked in "+plabel+dupNote)+'</p>'+
-      '<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>Opp Value</th><th>Status</th></tr></thead><tbody>'+repSummaryRows(repSumTab==="pipeline"?valueCohort:cohort,repSumTab)+'</tbody></table></div></div>';
+      statusSplitHTML(repSumTab==="pipeline"?valueCohort.filter(r=>REPORT_STATUSES.includes(canon(r.status))):cohort)+'<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>Opp Value</th><th>Status</th></tr></thead><tbody>'+repSummaryRows(repSumTab==="pipeline"?valueCohort:cohort,repSumTab)+'</tbody></table></div></div>';
 }
 function exportReport(){
   const R=computeReport();if(!R){toast("Nothing to report yet");return}
@@ -866,8 +912,11 @@ function exportReport(){
   const tbl=(lbl,list)=>{const rows=list.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");const rt2=reasonOf(r);const stx=esc(r.status||"Scheduled")+(rt2?' \u2014 '+esc(rt2):"");const cn=esc(r.companyName||"\u2014")+(r._dupCount>1?' (merged \u00d7'+r._dupCount+')':"");return '<tr><td>'+cn+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+stx+'</td></tr>'}).join("");return '<h3 style="font-size:13px;margin:18px 0 8px">'+lbl+' ('+list.length+')</h3><table class="p-list-table"><thead><tr><th>Company</th><th>Contact</th><th>BDM/Specialist</th><th>Booked By</th><th>Pillar</th><th>Opp \u00a3</th><th>Status</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7">No bookings.</td></tr>')+'</tbody></table>'};
   const amBody=amRows.length?amRows.map(a=>'<tr><td>'+esc(a.name)+'</td><td>'+a.n+'</td><td>'+a.sat+' of '+a.due+'</td><td>'+(a.due?Math.round(a.sat/a.due*100)+'%':'\u2014')+'</td><td>'+(a.opp?gbp(a.opp):'\u2014')+'</td><td>'+(a.won?gbp(a.won):'\u2014')+'</td></tr>').join(""):'<tr><td colspan="6">No bookings.</td></tr>';
   body+='<h3 style="font-size:13px;margin:18px 0 8px">BDM / Specialist breakdown</h3><table class="p-list-table"><thead><tr><th>BDM / Specialist</th><th>Bookings</th><th>Sat</th><th>Sit rate</th><th>Pipeline \u00a3</th><th>Closed Won \u00a3</th></tr></thead><tbody>'+amBody+'</tbody></table>';
+  const splitCounts={};cohort.forEach(r=>{const c=canon(r.status);splitCounts[c]=(splitCounts[c]||0)+1});
+  const splitRows=STATUSES.filter(x=>splitCounts[x]).map(x=>[x,Math.round(splitCounts[x]/cohort.length*100)+"% ("+splitCounts[x]+")"]);
+  body+='<div class="p-section"><h3>Status split</h3><div class="p-rows">'+(splitRows.length?rowsHTML(splitRows):'<div style="color:#888;font-size:12px">No bookings</div>')+'</div></div>';
   body+=tbl("Overall bookings",cohort);
-  body+=tbl("Proposals & contracts (meetings sat in "+plabel+")",valueCohort.filter(r=>REPORT_STATUSES.includes(r.status)));
+  body+=tbl("Proposals & contracts (meetings sat in "+plabel+")",valueCohort.filter(r=>REPORT_STATUSES.includes(canon(r.status))));
   body+='</div>';
   printHTML(body,"CloudClevr Reporting "+plabel,true);
 }
@@ -1037,12 +1086,14 @@ function init(){
   $("#f-status").addEventListener("change",e=>{filterStatus=e.target.value;page=1;updateFilterBadge();renderTable()});
   $("#f-mmonth").addEventListener("change",e=>{filterMM=e.target.value;page=1;updateFilterBadge();renderTable()});
   $("#f-bmonth").addEventListener("change",e=>{filterBM=e.target.value;page=1;updateFilterBadge();renderTable()});
-  $("#clear-filters").addEventListener("click",()=>{filterStatus="all";filterMM="all";filterBM="all";filterICP="all";page=1;rebuildFilters();renderTable();closeMenus()});
+  $("#clear-filters").addEventListener("click",()=>{filterStatus="all";filterMM="all";filterBM="all";filterICP="all";filterAM="all";page=1;rebuildFilters();renderTable();closeMenus()});
   $("#f-icp").addEventListener("change",e=>{filterICP=e.target.value;page=1;updateFilterBadge();renderTable()});
+  $("#f-am").addEventListener("change",e=>{filterAM=e.target.value;page=1;updateFilterBadge();renderTable()});
   $("#thead-row").addEventListener("click",e=>{const th=e.target.closest(".th-sort");if(!th)return;const k=th.dataset.sort;if(sortKey===k)sortDir=sortDir==="asc"?"desc":"asc";else{sortKey=k;sortDir="asc"}page=1;renderTable()});
   $("#pager").addEventListener("click",e=>{const b=e.target.closest(".pager-btn");if(!b||b.disabled)return;const p=parseInt(b.dataset.page,10);if(!isNaN(p)){page=p;renderTable()}});
   $("#rep-type").addEventListener("change",()=>{buildReportPeriods();renderReport()});
   $("#rep-period").addEventListener("change",renderReport);
+  $("#rep-am").addEventListener("change",e=>{repAM=e.target.value;renderReport()});
   $("#rep-pdf").addEventListener("click",exportReport);
   build121();
   $("#o2o-month").value=new Date().toISOString().slice(0,7);
