@@ -833,10 +833,11 @@ function computeReport(){
   let dsum=0,dc=0;cohort.forEach(r=>{if(r.dateBooked&&r.meetingDate){const days=(new Date(r.meetingDate)-new Date(r.dateBooked))/86400000;if(!isNaN(days)){dsum+=days;dc++}}});
   const avgDays=dc?dsum/dc:null;
   const today=new Date();today.setHours(23,59,59,999);
-  const due=cohort.filter(r=>{const d=r.meetingDate?new Date(r.meetingDate):null;return d&&!isNaN(d)&&d<=today});
-  const dueN=due.length,sitCount=due.filter(r=>SIT_SET.has(canon(r.status))).length,sitRate=dueN?Math.round(sitCount/dueN*100):0;
   const valueRaw=scopedBookings().filter(r=>{if(!amOK(r))return false;if(periodKeyOfDate(r.meetingDate)!==pk)return false;const d=r.meetingDate?new Date(r.meetingDate):null;return d&&!isNaN(d)&&d<=today});
   const valueCohort=dedupeByCompany(valueRaw);
+  /* Sit rate is measured on meetings that were SAT in this period, not booked in it. */
+  const due=valueCohort,dueN=due.length;
+  const sitCount=due.filter(r=>SIT_SET.has(canon(r.status))).length,sitRate=dueN?Math.round(sitCount/dueN*100):0;
   const won=valueCohort.filter(r=>canon(r.status)==="Closed Won"),wonVal=won.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0);
   const pipeline=valueCohort.filter(r=>canon(r.status)!=="Closed Won");
   const totalOpp=pipeline.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0),valued=pipeline.filter(r=>Number(r.opportunityValue)>0).length,avgOpp=valued?totalOpp/valued:0;
@@ -848,7 +849,8 @@ function computeReport(){
   const nonIcpSat=due.filter(r=>canon(r.status)==="Sat Unqualified Non-ICP").length;
   const amMap={};
   const amKey=r=>{const v=String(r.accountManager||"").trim();return v||"Unassigned"};
-  cohort.forEach(r=>{const k=amKey(r);if(!amMap[k])amMap[k]={name:k,n:0,due:0,sat:0,opp:0,won:0};amMap[k].n++;const d=r.meetingDate?new Date(r.meetingDate):null;if(d&&!isNaN(d)&&d<=today){amMap[k].due++;if(SIT_SET.has(canon(r.status)))amMap[k].sat++}});
+  cohort.forEach(r=>{const k=amKey(r);if(!amMap[k])amMap[k]={name:k,n:0,due:0,sat:0,opp:0,won:0};amMap[k].n++});
+  valueCohort.forEach(r=>{const k=amKey(r);if(!amMap[k])amMap[k]={name:k,n:0,due:0,sat:0,opp:0,won:0};amMap[k].due++;if(SIT_SET.has(canon(r.status)))amMap[k].sat++});
   valueCohort.forEach(r=>{const k=amKey(r);if(!amMap[k])amMap[k]={name:k,n:0,due:0,sat:0,opp:0,won:0};const v=Number(r.opportunityValue)||0;if(canon(r.status)==="Closed Won")amMap[k].won+=v;else amMap[k].opp+=v});
   const amRows=Object.values(amMap).sort((a,b)=>b.n-a.n||b.opp-a.opp||(a.name>b.name?1:-1));
   return {t,pk,plabel:periodLabelOf(t,pk),cohort,n,dupRemoved,valueCohort,vN:valueCohort.length,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp,amRows,satAll:satAll.length,icpSat,nonIcpSat};
@@ -881,7 +883,7 @@ function renderReport(){const host=$("#report-body");const R=computeReport();
   const statusOpts=['all'].concat(REPORT_STATUSES).map(s=>'<option value="'+s+'"'+(repStatusFilter===s?' selected':'')+'>'+(s==="all"?"All statuses":esc(s))+'</option>').join("");
   host.innerHTML='<div class="metric-grid">'+
       metric("Bookings","Booked in "+plabel+dupNote,n,false)+
-      metric("Sit rate (to date)",dueN?sitCount+" sat-qualified of "+dueN+" held \u00b7 "+icpSat+" ICP / "+nonIcpSat+" non-ICP":"No meetings held yet",dueN?sitRate+"%":"\u2014",false)+
+      metric("Sit rate",dueN?sitCount+" sat-qualified of "+dueN+" held in "+plabel+" \u00b7 "+icpSat+" ICP / "+nonIcpSat+" non-ICP":"No meetings held in "+plabel,dueN?sitRate+"%":"\u2014",false)+
       metric("Avg days booked \u2192 scheduled",avgDays==null?"No dated pairs":"Calendar days",avgDays==null?"\u2014":avgDays.toFixed(1),false)+
       metric("Total opportunity value","Meetings sat in "+plabel+" \u00b7 pipeline only, excludes closed won"+(valued?" \u00b7 "+gbp(Math.round(avgOpp))+" avg":""),gbp(totalOpp),false)+
       metric("Closed Won",won.length+" won \u00b7 from meetings sat in "+plabel,gbp(wonVal),true)+
@@ -904,7 +906,7 @@ function exportReport(){
   const typeLabel=t==="month"?"Month":t==="quarter"?"Quarter":"Year";
   let body='<div class="p-sheet">'+pdfHead("CloudClevr Reporting");
   body+='<p class="p-co">Reporting \u2014 '+esc(plabel)+'</p><p class="p-sub">'+typeLabel+' view \u00b7 '+esc(repScopeLabel())+' \u00b7 '+n+' unique compan'+(n===1?"y":"ies")+(dupRemoved?" \u00b7 "+dupRemoved+" duplicate"+(dupRemoved===1?"":"s")+" merged":"")+'</p>';
-  body+='<div class="p-section"><h3>Headline figures</h3><div class="p-rows">'+rowsHTML([["Bookings",n],["Sit rate (to date)",dueN?sitRate+"% ("+sitCount+" of "+dueN+" held)":"\u2014"],["Sat qualified split",satAll?icpSat+" ICP / "+nonIcpSat+" non-ICP":"\u2014"],["Avg days booked \u2192 scheduled",avgDays==null?"\u2014":avgDays.toFixed(1)],["Total opportunity value (meetings sat in "+plabel+", pipeline excl. closed won)",gbp(totalOpp)],["Closed Won (meetings sat in "+plabel+")",gbp(wonVal)+" ("+won.length+" won)"]])+'</div></div>';
+  body+='<div class="p-section"><h3>Headline figures</h3><div class="p-rows">'+rowsHTML([["Bookings",n],["Sit rate (meetings sat in "+plabel+")",dueN?sitRate+"% ("+sitCount+" of "+dueN+" held)":"\u2014"],["Sat qualified split",satAll?icpSat+" ICP / "+nonIcpSat+" non-ICP":"\u2014"],["Avg days booked \u2192 scheduled",avgDays==null?"\u2014":avgDays.toFixed(1)],["Total opportunity value (meetings sat in "+plabel+", pipeline excl. closed won)",gbp(totalOpp)],["Closed Won (meetings sat in "+plabel+")",gbp(wonVal)+" ("+won.length+" won)"]])+'</div></div>';
   const pillarRows=PILLAR_KEYS.filter(k=>pc[k]>0).map(k=>[PILLARS[k].label,pc[k]+" \u00b7 "+(totP?Math.round(pc[k]/totP*100):0)+"%"]);
   body+='<div class="p-section"><h3>Bookings by pillar</h3><div class="p-rows">'+(pillarRows.length?rowsHTML(pillarRows):'<div style="color:#888;font-size:12px">No pillars recorded</div>')+'</div></div>';
   const statRows=REPORT_STATUSES.filter(s=>byStat[s]).map(s=>[s,gbp(byStat[s].v)+" ("+byStat[s].c+")"]);
@@ -943,7 +945,7 @@ function o2oUser(){return (ME&&ME.is_admin&&VIEW_USER!=="all")?VIEW_USER:(ME?ME.
 function load121(){const uid=o2oUser(),map={};O2O_ROWS.forEach(r=>{if(r.user_id===uid)map[r.month]=r.data});return map}
 async function sbUpsert121(uid,month,data){if(!sb)return;const{error}=await sb.from("one_to_ones").upsert({user_id:uid,month:month,data:data,updated_at:new Date().toISOString()},{onConflict:"user_id,month"});if(error)toast("1-2-1 save failed: "+error.message)}
 function prevMonthKey(mk){const a=mk.split("-");let y=+a[0],m=+a[1]-1;if(m<1){m=12;y--}return y+"-"+pad(m)}
-function monthStats(mk){const c=bookingsForUser(o2oUser()).filter(r=>monthKey(r.dateBooked)===mk),n=c.length;const today=new Date();today.setHours(23,59,59,999);const due=c.filter(r=>{const d=r.meetingDate?new Date(r.meetingDate):null;return d&&!isNaN(d)&&d<=today});const sit=due.filter(r=>SIT_SET.has(canon(r.status))).length;return{n,dueN:due.length,sitRate:due.length?Math.round(sit/due.length*100):0,opp:c.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0),won:c.filter(r=>canon(r.status)==="Closed Won").reduce((a,r)=>a+(Number(r.opportunityValue)||0),0)}}
+function monthStats(mk){const all=bookingsForUser(o2oUser()),c=all.filter(r=>monthKey(r.dateBooked)===mk),n=c.length;const today=new Date();today.setHours(23,59,59,999);const due=all.filter(r=>{if(monthKey(r.meetingDate)!==mk)return false;const d=r.meetingDate?new Date(r.meetingDate):null;return d&&!isNaN(d)&&d<=today});const sit=due.filter(r=>SIT_SET.has(canon(r.status))).length;return{n,dueN:due.length,sitRate:due.length?Math.round(sit/due.length*100):0,opp:c.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0),won:c.filter(r=>canon(r.status)==="Closed Won").reduce((a,r)=>a+(Number(r.opportunityValue)||0),0)}}
 function o2oField(f){const id="o2o-"+f.k;let ctl;if(f.type==="select")ctl='<select id="'+id+'">'+f.options.map(o=>'<option>'+esc(o)+'</option>').join("")+'</select>';else ctl='<input id="'+id+'" type="'+(f.type||"number")+'">';return '<div class="o2o-field"><label for="'+id+'">'+esc(f.t)+'</label>'+ctl+'</div>'}
 function build121(){
   $("#o2o-meta").innerHTML=O2O_META.map(o2oField).join("");
