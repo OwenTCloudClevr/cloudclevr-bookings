@@ -182,6 +182,16 @@
   .cell-am{width:100%;padding:6px 8px;border:1px solid transparent;border-radius:7px;background:transparent;font-family:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
   .cell-am:hover{border-color:var(--line);background:#fff}
   .copy-chip{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:700;background:#E2ECFB;color:#2A4E86;vertical-align:middle}
+  .icp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:12px}
+  .icp-card{border:1px solid var(--line-2);border-radius:11px;padding:14px}
+  .icp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .icp-tag{font-size:11px;font-weight:800;letter-spacing:.4px;padding:3px 9px;border-radius:999px}
+  .icp-tag.is-icp{background:#D7F2CF;color:#176B0F}
+  .icp-tag.is-non{background:#FBEFD6;color:#8A6314}
+  .icp-rate{font-size:24px;font-weight:800;color:var(--ink);letter-spacing:-.5px}
+  .icp-bar{height:8px;border-radius:999px;background:var(--grey);overflow:hidden}
+  .icp-bar span{display:block;height:100%;background:var(--green-deep)}
+  .icp-meta{margin-top:9px;font-size:12px;color:var(--muted);font-weight:600}
   .ss-wrap{margin:10px 0 14px}
   .ss-bar{display:flex;height:10px;border-radius:999px;overflow:hidden;background:var(--grey)}
   .ss-seg{display:block;height:100%}
@@ -845,15 +855,22 @@ function computeReport(){
   const byStat={};valueCohort.forEach(r=>{const s=canon(r.status);if(!byStat[s])byStat[s]={c:0,v:0};byStat[s].c++;byStat[s].v+=Number(r.opportunityValue)||0});
   const repOpp=REPORT_STATUSES.reduce((a,s)=>a+(byStat[s]?byStat[s].v:0),0);
   const satAll=due.filter(r=>SIT_SET.has(canon(r.status)));
-  const icpSat=satAll.filter(r=>canon(r.status)==="Sat Qualified ICP").length;
-  const nonIcpSat=due.filter(r=>canon(r.status)==="Sat Unqualified Non-ICP").length;
+  /* ICP segment: the disposition wins where it states one, otherwise the ICP flag on the booking. */
+  const icpOf=r=>{const c=canon(r.status);if(c==="Sat Qualified ICP")return "ICP";if(c==="Sat Unqualified Non-ICP")return "Non-ICP";return r.icp==="ICP"?"ICP":"Non-ICP"};
+  const icpDue=due.filter(r=>icpOf(r)==="ICP"),nonDue=due.filter(r=>icpOf(r)==="Non-ICP");
+  const icpSat=icpDue.filter(r=>SIT_SET.has(canon(r.status))).length;
+  const nonIcpSat=nonDue.filter(r=>SIT_SET.has(canon(r.status))).length;
+  const icpSplit=[
+    {seg:"ICP",held:icpDue.length,sat:icpSat,rate:icpDue.length?Math.round(icpSat/icpDue.length*100):0,val:icpDue.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0)},
+    {seg:"Non-ICP",held:nonDue.length,sat:nonIcpSat,rate:nonDue.length?Math.round(nonIcpSat/nonDue.length*100):0,val:nonDue.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0)}
+  ];
   const amMap={};
   const amKey=r=>{const v=String(r.accountManager||"").trim();return v||"Unassigned"};
   cohort.forEach(r=>{const k=amKey(r);if(!amMap[k])amMap[k]={name:k,n:0,due:0,sat:0,opp:0,won:0};amMap[k].n++});
   valueCohort.forEach(r=>{const k=amKey(r);if(!amMap[k])amMap[k]={name:k,n:0,due:0,sat:0,opp:0,won:0};amMap[k].due++;if(SIT_SET.has(canon(r.status)))amMap[k].sat++});
   valueCohort.forEach(r=>{const k=amKey(r);if(!amMap[k])amMap[k]={name:k,n:0,due:0,sat:0,opp:0,won:0};const v=Number(r.opportunityValue)||0;if(canon(r.status)==="Closed Won")amMap[k].won+=v;else amMap[k].opp+=v});
   const amRows=Object.values(amMap).sort((a,b)=>b.n-a.n||b.opp-a.opp||(a.name>b.name?1:-1));
-  return {t,pk,plabel:periodLabelOf(t,pk),cohort,n,dupRemoved,valueCohort,vN:valueCohort.length,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp,amRows,satAll:satAll.length,icpSat,nonIcpSat};
+  return {t,pk,plabel:periodLabelOf(t,pk),cohort,n,dupRemoved,valueCohort,vN:valueCohort.length,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp,amRows,satAll:satAll.length,icpSat,nonIcpSat,icpSplit};
 }
 function reasonOf(r){return REASON_STATUSES[canon(r.status)]?(r.statusReason||r.unqualReason||r.nliReason||""):""}
 function statusPill(s){const c=canon(s),sc=STATUS_COLOR[c]||["#eee","#555"];return '<span class="st-pill" style="background:'+sc[0]+';color:'+sc[1]+'">'+esc(c)+'</span>'}
@@ -875,7 +892,7 @@ function setRepStatus(v){repStatusFilter=v;renderReport()}
 function setSumTab(v){repSumTab=v;renderReport()}
 function renderReport(){const host=$("#report-body");const R=computeReport();
   if(!R){host.innerHTML='<div class="empty"><div class="ico">'+svg('<path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>',22).replace('stroke="currentColor"','stroke="#2FA221"')+'</div><h3>No data to report</h3><p>Save some bookings and they will appear here, grouped by when they were booked.</p></div>';return}
-  const {t,pk,plabel,cohort,n,dupRemoved,valueCohort,vN,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp,amRows,satAll,icpSat,nonIcpSat}=R;
+  const {t,pk,plabel,cohort,n,dupRemoved,valueCohort,vN,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp,amRows,satAll,icpSat,nonIcpSat,icpSplit}=R;
   const dupNote=dupRemoved?" \u00b7 "+dupRemoved+" duplicate"+(dupRemoved===1?"":"s")+" merged":"";
   const statusesToShow=repStatusFilter==="all"?REPORT_STATUSES:[repStatusFilter];
   const maxV=Math.max(1,...statusesToShow.map(s=>byStat[s]?byStat[s].v:0));
@@ -892,6 +909,8 @@ function renderReport(){const host=$("#report-body");const R=computeReport();
       '<div class="card-pad"><h3>Bookings by pillar</h3><p class="sub">'+(totP?totP+" pillar selections across "+n+" booking"+(n===1?"":"s"):"No pillars recorded")+'</p><div class="pie-wrap">'+pieSVG(pc,totP)+pieLegend(pc,totP)+'</div></div>'+
       '<div class="card-pad"><div class="card-head-row"><h3>Opportunity value by status</h3><p style="font-size:11px;color:#666;margin:0 0 6px">Based on '+vN+' meeting'+(vN===1?"":"s")+' sat in '+esc(plabel)+'</p><select class="mini-select" onchange="setRepStatus(this.value)">'+statusOpts+'</select></div><p class="sub">'+(repOpp?gbp(repOpp)+" across proposals, closed won and closed lost \u00b7 "+vN+" meeting"+(vN===1?"":"s")+" sat in "+plabel:"No meetings sat in "+plabel+" at proposal stage or beyond")+'</p>'+(brkRows||'<div style="color:var(--muted);font-size:13px;padding:8px 0">Nothing to show for this status.</div>')+'</div>'+
     '</div>'+
+    '<div class="card-pad" style="margin-top:16px"><h3>Sit rate by ICP</h3><p class="sub">'+(dueN?dueN+' meeting'+(dueN===1?'':'s')+' held in '+plabel:'No meetings held in '+plabel)+'</p>'+
+      '<div class="icp-grid">'+icpSplit.map(x=>'<div class="icp-card"><div class="icp-head"><span class="icp-tag '+(x.seg==="ICP"?"is-icp":"is-non")+'">'+x.seg+'</span><span class="icp-rate">'+(x.held?x.rate+'%':'\u2014')+'</span></div><div class="icp-bar"><span style="width:'+(x.held?x.rate:0)+'%"></span></div><div class="icp-meta">'+x.sat+' sat-qualified of '+x.held+' held'+(x.val?' \u00b7 '+gbp(x.val):'')+'</div></div>').join('')+'</div></div>'+
     '<div class="card-pad" style="margin-top:16px"><h3>BDM / Specialist breakdown</h3><p class="sub">'+(amRows.length?'Who the '+n+' booking'+(n===1?'':'s')+' in '+plabel+' were booked to':'No bookings to attribute')+'</p>'+
       '<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>BDM / Specialist</th><th>Bookings</th><th>Sat</th><th>Sit rate</th><th>Pipeline value</th><th>Closed Won</th></tr></thead><tbody>'+
       (amRows.length?amRows.map(a=>'<tr><td>'+esc(a.name)+'</td><td>'+a.n+'</td><td>'+a.sat+' of '+a.due+'</td><td>'+(a.due?Math.round(a.sat/a.due*100)+'%':'\u2014')+'</td><td>'+(a.opp?gbp(a.opp):'\u2014')+'</td><td>'+(a.won?gbp(a.won):'\u2014')+'</td></tr>').join(''):'<tr><td colspan="6" style="color:var(--muted)">No bookings.</td></tr>')+
@@ -902,7 +921,7 @@ function renderReport(){const host=$("#report-body");const R=computeReport();
 }
 function exportReport(){
   const R=computeReport();if(!R){toast("Nothing to report yet");return}
-  const {t,plabel,cohort,n,dupRemoved,valueCohort,vN,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp,amRows,satAll,icpSat,nonIcpSat}=R;
+  const {t,plabel,cohort,n,dupRemoved,valueCohort,vN,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp,amRows,satAll,icpSat,nonIcpSat,icpSplit}=R;
   const typeLabel=t==="month"?"Month":t==="quarter"?"Quarter":"Year";
   let body='<div class="p-sheet">'+pdfHead("CloudClevr Reporting");
   body+='<p class="p-co">Reporting \u2014 '+esc(plabel)+'</p><p class="p-sub">'+typeLabel+' view \u00b7 '+esc(repScopeLabel())+' \u00b7 '+n+' unique compan'+(n===1?"y":"ies")+(dupRemoved?" \u00b7 "+dupRemoved+" duplicate"+(dupRemoved===1?"":"s")+" merged":"")+'</p>';
@@ -914,6 +933,7 @@ function exportReport(){
   const tbl=(lbl,list)=>{const rows=list.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");const rt2=reasonOf(r);const stx=esc(r.status||"Scheduled")+(rt2?' \u2014 '+esc(rt2):"");const cn=esc(r.companyName||"\u2014")+(r._dupCount>1?' (merged \u00d7'+r._dupCount+')':"");return '<tr><td>'+cn+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+stx+'</td></tr>'}).join("");return '<h3 style="font-size:13px;margin:18px 0 8px">'+lbl+' ('+list.length+')</h3><table class="p-list-table"><thead><tr><th>Company</th><th>Contact</th><th>BDM/Specialist</th><th>Booked By</th><th>Pillar</th><th>Opp \u00a3</th><th>Status</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7">No bookings.</td></tr>')+'</tbody></table>'};
   const amBody=amRows.length?amRows.map(a=>'<tr><td>'+esc(a.name)+'</td><td>'+a.n+'</td><td>'+a.sat+' of '+a.due+'</td><td>'+(a.due?Math.round(a.sat/a.due*100)+'%':'\u2014')+'</td><td>'+(a.opp?gbp(a.opp):'\u2014')+'</td><td>'+(a.won?gbp(a.won):'\u2014')+'</td></tr>').join(""):'<tr><td colspan="6">No bookings.</td></tr>';
   body+='<h3 style="font-size:13px;margin:18px 0 8px">BDM / Specialist breakdown</h3><table class="p-list-table"><thead><tr><th>BDM / Specialist</th><th>Bookings</th><th>Sat</th><th>Sit rate</th><th>Pipeline \u00a3</th><th>Closed Won \u00a3</th></tr></thead><tbody>'+amBody+'</tbody></table>';
+  body+='<div class="p-section"><h3>Sit rate by ICP</h3><div class="p-rows">'+rowsHTML(icpSplit.map(x=>[x.seg,(x.held?x.rate+"% ("+x.sat+" of "+x.held+" held)":"No meetings held")]))+'</div></div>';
   const splitCounts={};cohort.forEach(r=>{const c=canon(r.status);splitCounts[c]=(splitCounts[c]||0)+1});
   const splitRows=STATUSES.filter(x=>splitCounts[x]).map(x=>[x,Math.round(splitCounts[x]/cohort.length*100)+"% ("+splitCounts[x]+")"]);
   body+='<div class="p-section"><h3>Status split</h3><div class="p-rows">'+(splitRows.length?rowsHTML(splitRows):'<div style="color:#888;font-size:12px">No bookings</div>')+'</div></div>';
