@@ -841,6 +841,7 @@ function mergeGroup(group){
   return merged;
 }
 function dedupeByCompany(list){const groups=[];list.forEach(r=>{const g=groups.find(grp=>sameCompany(grp[0].companyName,r.companyName));if(g)g.push(r);else groups.push([r])});return groups.map(mergeGroup)}
+const NOT_SAT=new Set(["Scheduled","Cancelled","No-Show"]);
 function computeReport(){
   const t=$("#rep-type").value,pk=$("#rep-period").value;if(!pk)return null;
   const amOK=r=>repAM==="all"||String(r.accountManager||"").trim()===repAM;
@@ -851,9 +852,12 @@ function computeReport(){
   const today=new Date();today.setHours(23,59,59,999);
   const valueRaw=scopedBookings().filter(r=>{if(!amOK(r))return false;if(periodKeyOfDate(r.meetingDate)!==pk)return false;const d=r.meetingDate?new Date(r.meetingDate):null;return d&&!isNaN(d)&&d<=today});
   const valueCohort=dedupeByCompany(valueRaw);
-  /* Sit rate is measured on meetings that were SAT in this period, not booked in it. */
+  /* Sit rate: of the meetings due to sit in this period, how many actually sat.
+     Scheduled (not updated), Cancelled and No-Show count as due but not sat, which
+     is exactly the set excluded from the Sat appointments breakdown below. */
   const due=valueCohort,dueN=due.length;
-  const sitCount=due.filter(r=>SIT_SET.has(canon(r.status))).length,sitRate=dueN?Math.round(sitCount/dueN*100):0;
+  const satListEarly=due.filter(r=>!NOT_SAT.has(canon(r.status)));
+  const sitCount=satListEarly.length,sitRate=dueN?Math.round(sitCount/dueN*100):0;
   const won=valueCohort.filter(r=>canon(r.status)==="Closed Won"),wonVal=won.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0);
   const pipeline=valueCohort.filter(r=>canon(r.status)!=="Closed Won");
   const totalOpp=pipeline.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0),valued=pipeline.filter(r=>Number(r.opportunityValue)>0).length,avgOpp=valued?totalOpp/valued:0;
@@ -864,8 +868,9 @@ function computeReport(){
   /* ICP segment: the disposition wins where it states one, otherwise the ICP flag on the booking. */
   const icpOf=r=>{const c=canon(r.status);if(c==="Sat Qualified ICP")return "ICP";if(c==="Sat Unqualified Non-ICP")return "Non-ICP";return r.icp==="ICP"?"ICP":"Non-ICP"};
   const icpDue=due.filter(r=>icpOf(r)==="ICP"),nonDue=due.filter(r=>icpOf(r)==="Non-ICP");
-  const icpSat=icpDue.filter(r=>SIT_SET.has(canon(r.status))).length;
-  const nonIcpSat=nonDue.filter(r=>SIT_SET.has(canon(r.status))).length;
+  /* Reported as in the breakdown: of the meetings that actually sat, the ICP split. */
+  const icpSat=satListEarly.filter(r=>icpOf(r)==="ICP"&&SIT_SET.has(canon(r.status))).length;
+  const nonIcpSat=satListEarly.length-icpSat;
   const icpSplit=[
     {seg:"ICP",held:icpDue.length,sat:icpSat,rate:icpDue.length?Math.round(icpSat/icpDue.length*100):0,val:icpDue.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0)},
     {seg:"Non-ICP",held:nonDue.length,sat:nonIcpSat,rate:nonDue.length?Math.round(nonIcpSat/nonDue.length*100):0,val:nonDue.reduce((a,r)=>a+(Number(r.opportunityValue)||0),0)}
@@ -889,7 +894,6 @@ function statusSplitHTML(list){
   const keys=order.map(s=>{const sc=STATUS_COLOR[s]||["#ddd","#555"],pct=counts[s]/tot*100;return '<span class="ss-key"><span class="ss-dot" style="background:'+sc[1]+'"></span>'+esc(s)+' <strong>'+Math.round(pct)+'%</strong> <small>('+counts[s]+')</small></span>'}).join("");
   return '<div class="ss-wrap"><div class="ss-bar">'+seg+'</div><div class="ss-keys">'+keys+'</div></div>';
 }
-const NOT_SAT=new Set(["Scheduled","Cancelled","No-Show"]);
 function satOnly(list){return list.filter(r=>!NOT_SAT.has(canon(r.status)))}
 function satBreakdownRows(list){
   if(!list.length)return '<tr><td colspan="9" style="color:var(--muted)">No meetings sat in this period.</td></tr>';
@@ -924,7 +928,7 @@ function renderReport(){const host=$("#report-body");const R=computeReport();
   const statusOpts=['all'].concat(REPORT_STATUSES).map(s=>'<option value="'+s+'"'+(repStatusFilter===s?' selected':'')+'>'+(s==="all"?"All statuses":esc(s))+'</option>').join("");
   host.innerHTML='<div class="metric-grid">'+
       metric("Bookings","Booked in "+plabel+dupNote,n,false)+
-      metric("Sit rate",dueN?sitCount+" sat-qualified of "+dueN+" held in "+plabel+" \u00b7 "+icpSat+" ICP / "+nonIcpSat+" non-ICP":"No meetings held in "+plabel,dueN?sitRate+"%":"\u2014",false)+
+      metric("Sit rate",dueN?sitCount+" sat of "+dueN+" due in "+plabel+" \u00b7 "+icpSat+" ICP / "+nonIcpSat+" non-ICP":"No meetings due in "+plabel,dueN?sitRate+"%":"\u2014",false)+
       metric("Avg days booked \u2192 scheduled",avgDays==null?"No dated pairs":"Calendar days",avgDays==null?"\u2014":avgDays.toFixed(1),false)+
       metric("Total opportunity value","Meetings sat in "+plabel+" \u00b7 pipeline only, excludes closed won"+(valued?" \u00b7 "+gbp(Math.round(avgOpp))+" avg":""),gbp(totalOpp),false)+
       metric("Closed Won",won.length+" won \u00b7 from meetings sat in "+plabel,gbp(wonVal),true)+
@@ -951,7 +955,7 @@ function exportReport(){
   const typeLabel=t==="month"?"Month":t==="quarter"?"Quarter":"Year";
   let body='<div class="p-sheet">'+pdfHead("CloudClevr Reporting");
   body+='<p class="p-co">Reporting \u2014 '+esc(plabel)+'</p><p class="p-sub">'+typeLabel+' view \u00b7 '+esc(repScopeLabel())+' \u00b7 '+n+' unique compan'+(n===1?"y":"ies")+(dupRemoved?" \u00b7 "+dupRemoved+" duplicate"+(dupRemoved===1?"":"s")+" merged":"")+'</p>';
-  body+='<div class="p-section"><h3>Headline figures</h3><div class="p-rows">'+rowsHTML([["Bookings",n],["Sit rate (meetings sat in "+plabel+")",dueN?sitRate+"% ("+sitCount+" of "+dueN+" held)":"\u2014"],["Sat qualified split",satAll?icpSat+" ICP / "+nonIcpSat+" non-ICP":"\u2014"],["Avg days booked \u2192 scheduled",avgDays==null?"\u2014":avgDays.toFixed(1)],["Total opportunity value (meetings sat in "+plabel+", pipeline excl. closed won)",gbp(totalOpp)],["Closed Won (meetings sat in "+plabel+")",gbp(wonVal)+" ("+won.length+" won)"]])+'</div></div>';
+  body+='<div class="p-section"><h3>Headline figures</h3><div class="p-rows">'+rowsHTML([["Bookings",n],["Sit rate (meetings sat in "+plabel+")",dueN?sitRate+"% ("+sitCount+" sat of "+dueN+" due)":"\u2014"],["Sat qualified split",satAll?icpSat+" ICP / "+nonIcpSat+" non-ICP":"\u2014"],["Avg days booked \u2192 scheduled",avgDays==null?"\u2014":avgDays.toFixed(1)],["Total opportunity value (meetings sat in "+plabel+", pipeline excl. closed won)",gbp(totalOpp)],["Closed Won (meetings sat in "+plabel+")",gbp(wonVal)+" ("+won.length+" won)"]])+'</div></div>';
   const pillarRows=PILLAR_KEYS.filter(k=>pc[k]>0).map(k=>[PILLARS[k].label,pc[k]+" \u00b7 "+(totP?Math.round(pc[k]/totP*100):0)+"%"]);
   body+='<div class="p-section"><h3>Bookings by pillar</h3><div class="p-rows">'+(pillarRows.length?rowsHTML(pillarRows):'<div style="color:#888;font-size:12px">No pillars recorded</div>')+'</div></div>';
   const statRows=REPORT_STATUSES.filter(s=>byStat[s]).map(s=>[s,gbp(byStat[s].v)+" ("+byStat[s].c+")"]);
