@@ -887,6 +887,17 @@ function statusSplitHTML(list){
   const keys=order.map(s=>{const sc=STATUS_COLOR[s]||["#ddd","#555"],pct=counts[s]/tot*100;return '<span class="ss-key"><span class="ss-dot" style="background:'+sc[1]+'"></span>'+esc(s)+' <strong>'+Math.round(pct)+'%</strong> <small>('+counts[s]+')</small></span>'}).join("");
   return '<div class="ss-wrap"><div class="ss-bar">'+seg+'</div><div class="ss-keys">'+keys+'</div></div>';
 }
+function satBreakdownRows(list){
+  if(!list.length)return '<tr><td colspan="9" style="color:var(--muted)">No meetings sat in this period.</td></tr>';
+  const sorted=list.slice().sort((a,b)=>new Date(a.meetingDate)-new Date(b.meetingDate));
+  return sorted.map(r=>{
+    const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");
+    const c=canon(r.status);
+    const seg=(c==="Sat Qualified ICP")?"ICP":(c==="Sat Unqualified Non-ICP")?"Non-ICP":(r.icp==="ICP"?"ICP":"Non-ICP");
+    const rsn=reasonOf(r);
+    return '<tr><td>'+fmtDateTimeUK(r.meetingDate)+'</td><td>'+esc(r.companyName||"\u2014")+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td><span class="icp-tag '+(seg==="ICP"?"is-icp":"is-non")+'">'+seg+'</span></td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+statusPill(r.status)+(rsn?'<div class="nli-reason">'+esc(rsn)+'</div>':"")+'</td></tr>';
+  }).join("");
+}
 function repSummaryRows(cohort,tab){
   const list=tab==="pipeline"?cohort.filter(r=>REPORT_STATUSES.includes(canon(r.status))):cohort;
   if(!list.length)return '<tr><td colspan="7" style="color:var(--muted)">No bookings.</td></tr>';
@@ -921,7 +932,9 @@ function renderReport(){const host=$("#report-body");const R=computeReport();
       '</tbody></table></div></div>'+
     '<div class="card-pad" style="margin-top:16px"><div class="card-head-row"><h3>Booking summary</h3><div class="rep-tabs"><button class="rep-tab'+(repSumTab==="all"?" active":"")+'" onclick="setSumTab(&quot;all&quot;)">Overall bookings</button><button class="rep-tab'+(repSumTab==="pipeline"?" active":"")+'" onclick="setSumTab(&quot;pipeline&quot;)">Proposals &amp; contracts</button></div></div>'+
       '<p class="sub">'+(repSumTab==="pipeline"?"Proposals, contracts and closed won from meetings sat in "+plabel:n+" unique compan"+(n===1?"y":"ies")+" booked in "+plabel+dupNote)+'</p>'+
-      statusSplitHTML(repSumTab==="pipeline"?valueCohort.filter(r=>REPORT_STATUSES.includes(canon(r.status))):cohort)+'<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>Opp Value</th><th>Status</th></tr></thead><tbody>'+repSummaryRows(repSumTab==="pipeline"?valueCohort:cohort,repSumTab)+'</tbody></table></div></div>';
+      statusSplitHTML(repSumTab==="pipeline"?valueCohort.filter(r=>REPORT_STATUSES.includes(canon(r.status))):cohort)+'<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>Opp Value</th><th>Status</th></tr></thead><tbody>'+repSummaryRows(repSumTab==="pipeline"?valueCohort:cohort,repSumTab)+'</tbody></table></div></div>'+
+    '<div class="card-pad" style="margin-top:16px"><h3>Sat appointments breakdown</h3><p class="sub">'+(vN?vN+' meeting'+(vN===1?'':'s')+' sat in '+plabel+' \u00b7 '+sitCount+' sat-qualified \u00b7 '+(dueN?sitRate:0)+'% sit rate':'No meetings sat in '+plabel)+'</p>'+
+      '<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Date sat</th><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>ICP</th><th>Opp Value</th><th>Outcome</th></tr></thead><tbody>'+satBreakdownRows(valueCohort)+'</tbody></table></div></div>';
 }
 function exportReport(){
   const R=computeReport();if(!R){toast("Nothing to report yet");return}
@@ -942,6 +955,13 @@ function exportReport(){
   const splitRows=STATUSES.filter(x=>splitCounts[x]).map(x=>[x,Math.round(splitCounts[x]/cohort.length*100)+"% ("+splitCounts[x]+")"]);
   body+='<div class="p-section"><h3>Status split</h3><div class="p-rows">'+(splitRows.length?rowsHTML(splitRows):'<div style="color:#888;font-size:12px">No bookings</div>')+'</div></div>';
   body+=tbl("Overall bookings",cohort);
+  const satRows=valueCohort.slice().sort((a,b)=>new Date(a.meetingDate)-new Date(b.meetingDate)).map(r=>{
+    const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");
+    const c=canon(r.status);const seg=(c==="Sat Qualified ICP")?"ICP":(c==="Sat Unqualified Non-ICP")?"Non-ICP":(r.icp==="ICP"?"ICP":"Non-ICP");
+    const rsn=reasonOf(r);
+    return '<tr><td>'+fmtDateTimeUK(r.meetingDate)+'</td><td>'+esc(r.companyName||"\u2014")+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+seg+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+esc(c)+(rsn?" \u2014 "+esc(rsn):"")+'</td></tr>';
+  }).join("");
+  body+='<h3 style="font-size:13px;margin:18px 0 8px">Sat appointments breakdown ('+valueCohort.length+')</h3><table class="p-list-table"><thead><tr><th>Date sat</th><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>ICP</th><th>Opp \u00a3</th><th>Outcome</th></tr></thead><tbody>'+(satRows||'<tr><td colspan="9">No meetings sat.</td></tr>')+'</tbody></table>';
   body+=tbl("Proposals & contracts (meetings sat in "+plabel+")",valueCohort.filter(r=>REPORT_STATUSES.includes(canon(r.status))));
   body+='</div>';
   printHTML(body,"CloudClevr Reporting "+plabel,true);
