@@ -573,6 +573,8 @@ function canon(s){s=s||"Scheduled";return LEGACY_STATUS[s]||s}
 const STATUS_COLOR={"Scheduled":["#F0F0F0","#555"],"Confirmed":["#E9FBE5","#2E7D24"],"Sat Qualified":["#D7F2CF","#176B0F"],"Sat Qualified ICP":["#D7F2CF","#176B0F"],"Sat Qualified Non-ICP":["#E4F0DC","#4A6B2E"],"Sat Unqualified":["#FBEFD6","#8A6314"],"Sat Unqualified Non-ICP":["#FBEFD6","#8A6314"],"Cancelled":["#FBE0DE","#B23A2E"],"No-Show":["#F3E2E0","#8A4034"],"No Longer Interested":["#ECECEC","#5A5A5A"],"Proposal Sent":["#E2ECFB","#2A4E86"],"Contract Sent":["#EAE2FB","#5A3F9E"],"Closed Won":["#CFF0C6","#0F5A09"],"Closed Lost":["#ECECEC","#5A5A5A"],"Contract Signed":["#CFF0C6","#0F5A09"]};
 const SAT_SET=new Set(["Sat Qualified ICP","Sat Unqualified Non-ICP","Proposal Sent","Closed Won","Closed Lost"]);
 const REPORT_STATUSES=["Proposal Sent","Closed Won","Closed Lost"];
+/* The summary tab also shows meetings sat qualified by a specialist, before any proposal. */
+const SUMMARY_STATUSES=["Sat Qualified ICP","Proposal Sent","Closed Won","Closed Lost"];
 const SIT_SET=new Set(["Sat Qualified ICP","Proposal Sent","Closed Won","Closed Lost"]);
 const COLS=[{key:"company",label:"Company",always:true},{key:"contact",label:"Contact"},{key:"phone",label:"Phone"},{key:"dateBooked",label:"Date Booked"},{key:"meeting",label:"Meeting"},{key:"type",label:"Type"},{key:"icp",label:"ICP"},{key:"am",label:"BDM/Specialist"},{key:"bde",label:"Booked By"},{key:"pillars",label:"Pillars"},{key:"status",label:"Status",always:true},{key:"outlook",label:"Outlook"},{key:"opportunityValue",label:"Opp Value"},{key:"actions",label:"Actions",always:true}];
 const COLW={company:140,contact:150,phone:115,dateBooked:110,meeting:150,type:130,icp:80,am:170,bde:110,pillars:150,status:150,outlook:80,opportunityValue:110,actions:135};
@@ -901,7 +903,7 @@ function satBreakdownRows(list){
   }).join("");
 }
 function repSummaryRows(cohort,tab){
-  const list=tab==="pipeline"?cohort.filter(r=>REPORT_STATUSES.includes(canon(r.status))):cohort;
+  const list=tab==="pipeline"?cohort.filter(r=>SUMMARY_STATUSES.includes(canon(r.status))):cohort;
   if(!list.length)return '<tr><td colspan="7" style="color:var(--muted)">No bookings.</td></tr>';
   return list.map(r=>{const pl=(r.pillarOrder||Object.keys(r.pillars||{})).map(k=>PILLARS[k]?PILLARS[k].label:"").filter(Boolean).join(", ");const rt=reasonOf(r);const rsn=rt?'<div class="nli-reason">'+esc(rt)+'</div>':"";const dup=r._dupCount>1?' <span class="dup-chip" title="'+esc((r._dupBy||[]).join(", "))+'">merged \u00d7'+r._dupCount+'</span>':"";return '<tr><td>'+esc(r.companyName||"\u2014")+dup+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+statusPill(r.status)+rsn+'</td></tr>'}).join("");
 }
@@ -933,9 +935,9 @@ function renderReport(){const host=$("#report-body");const R=computeReport();
       '<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>BDM / Specialist</th><th>Bookings</th><th>Sat</th><th>Sit rate</th><th>Pipeline value</th><th>Closed Won</th></tr></thead><tbody>'+
       (amRows.length?amRows.map(a=>'<tr><td>'+esc(a.name)+'</td><td>'+a.n+'</td><td>'+a.sat+' of '+a.due+'</td><td>'+(a.due?Math.round(a.sat/a.due*100)+'%':'\u2014')+'</td><td>'+(a.opp?gbp(a.opp):'\u2014')+'</td><td>'+(a.won?gbp(a.won):'\u2014')+'</td></tr>').join(''):'<tr><td colspan="6" style="color:var(--muted)">No bookings.</td></tr>')+
       '</tbody></table></div></div>'+
-    '<div class="card-pad" style="margin-top:16px"><div class="card-head-row"><h3>Booking summary</h3><div class="rep-tabs"><button class="rep-tab'+(repSumTab==="all"?" active":"")+'" onclick="setSumTab(&quot;all&quot;)">Overall bookings</button><button class="rep-tab'+(repSumTab==="pipeline"?" active":"")+'" onclick="setSumTab(&quot;pipeline&quot;)">Proposals &amp; contracts</button></div></div>'+
-      '<p class="sub">'+(repSumTab==="pipeline"?"Proposals, contracts and closed won from meetings sat in "+plabel:n+" unique compan"+(n===1?"y":"ies")+" booked in "+plabel+dupNote)+'</p>'+
-      statusSplitHTML(repSumTab==="pipeline"?valueCohort.filter(r=>REPORT_STATUSES.includes(canon(r.status))):cohort)+'<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>Opp Value</th><th>Status</th></tr></thead><tbody>'+repSummaryRows(repSumTab==="pipeline"?valueCohort:cohort,repSumTab)+'</tbody></table></div></div>'+
+    '<div class="card-pad" style="margin-top:16px"><div class="card-head-row"><h3>Booking summary</h3><div class="rep-tabs"><button class="rep-tab'+(repSumTab==="all"?" active":"")+'" onclick="setSumTab(&quot;all&quot;)">Overall bookings</button><button class="rep-tab'+(repSumTab==="pipeline"?" active":"")+'" onclick="setSumTab(&quot;pipeline&quot;)">Sat qualified &amp; beyond</button></div></div>'+
+      '<p class="sub">'+(repSumTab==="pipeline"?"Sat qualified, proposals, closed won and closed lost from meetings sat in "+plabel:n+" unique compan"+(n===1?"y":"ies")+" booked in "+plabel+dupNote)+'</p>'+
+      statusSplitHTML(repSumTab==="pipeline"?valueCohort.filter(r=>SUMMARY_STATUSES.includes(canon(r.status))):cohort)+'<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>Opp Value</th><th>Status</th></tr></thead><tbody>'+repSummaryRows(repSumTab==="pipeline"?valueCohort:cohort,repSumTab)+'</tbody></table></div></div>'+
     '<div class="card-pad" style="margin-top:16px"><h3>Sat appointments breakdown</h3><p class="sub">'+(satList.length?satList.length+' meeting'+(satList.length===1?'':'s')+' sat in '+plabel+' \u00b7 '+sitCount+' sat-qualified \u00b7 excludes scheduled, cancelled and no-shows':'No meetings sat in '+plabel)+'</p>'+
       '<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Date sat</th><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>ICP</th><th>Opp Value</th><th>Outcome</th></tr></thead><tbody>'+satBreakdownRows(satList)+'</tbody></table></div></div>';
 }
@@ -965,7 +967,7 @@ function exportReport(){
     return '<tr><td>'+fmtDateTimeUK(r.meetingDate)+'</td><td>'+esc(r.companyName||"\u2014")+'</td><td>'+esc(r.contactName||"\u2014")+'</td><td>'+esc(r.accountManager||"\u2014")+'</td><td>'+esc(r.bde||"\u2014")+'</td><td>'+esc(pl||"\u2014")+'</td><td>'+seg+'</td><td>'+(r.opportunityValue?gbp(r.opportunityValue):"\u2014")+'</td><td>'+esc(c)+(rsn?" \u2014 "+esc(rsn):"")+'</td></tr>';
   }).join("");
   body+='<h3 style="font-size:13px;margin:18px 0 8px">Sat appointments breakdown ('+satPdf.length+')</h3><table class="p-list-table"><thead><tr><th>Date sat</th><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>ICP</th><th>Opp \u00a3</th><th>Outcome</th></tr></thead><tbody>'+(satRows||'<tr><td colspan="9">No meetings sat.</td></tr>')+'</tbody></table>';
-  body+=tbl("Proposals & contracts (meetings sat in "+plabel+")",valueCohort.filter(r=>REPORT_STATUSES.includes(canon(r.status))));
+  body+=tbl("Sat qualified & beyond (meetings sat in "+plabel+")",valueCohort.filter(r=>SUMMARY_STATUSES.includes(canon(r.status))));
   body+='</div>';
   printHTML(body,"CloudClevr Reporting "+plabel,true);
 }
