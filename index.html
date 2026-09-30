@@ -913,6 +913,10 @@ function renderReport(){const host=$("#report-body");const R=computeReport();
   if(!R){host.innerHTML='<div class="empty"><div class="ico">'+svg('<path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>',22).replace('stroke="currentColor"','stroke="#2FA221"')+'</div><h3>No data to report</h3><p>Save some bookings and they will appear here, grouped by when they were booked.</p></div>';return}
   const {t,pk,plabel,cohort,n,dupRemoved,valueCohort,vN,avgDays,dueN,sitCount,sitRate,won,wonVal,totalOpp,valued,avgOpp,pc,totP,byStat,repOpp,amRows,satAll,icpSat,nonIcpSat,icpSplit}=R;
   const satList=satOnly(valueCohort);
+  /* In this section "sat qualified" means ICP only - non-ICP sits are counted separately. */
+  const segOf=r=>{const c=canon(r.status);if(c==="Sat Qualified ICP")return "ICP";if(c==="Sat Unqualified Non-ICP")return "Non-ICP";return r.icp==="ICP"?"ICP":"Non-ICP"};
+  const satQualIcp=satList.filter(r=>SIT_SET.has(canon(r.status))&&segOf(r)==="ICP").length;
+  const satNonIcp=satList.length-satQualIcp;
   const dupNote=dupRemoved?" \u00b7 "+dupRemoved+" duplicate"+(dupRemoved===1?"":"s")+" merged":"";
   const statusesToShow=repStatusFilter==="all"?REPORT_STATUSES:[repStatusFilter];
   const maxV=Math.max(1,...statusesToShow.map(s=>byStat[s]?byStat[s].v:0));
@@ -938,7 +942,7 @@ function renderReport(){const host=$("#report-body");const R=computeReport();
     '<div class="card-pad" style="margin-top:16px"><div class="card-head-row"><h3>Booking summary</h3><div class="rep-tabs"><button class="rep-tab'+(repSumTab==="all"?" active":"")+'" onclick="setSumTab(&quot;all&quot;)">Overall bookings</button><button class="rep-tab'+(repSumTab==="pipeline"?" active":"")+'" onclick="setSumTab(&quot;pipeline&quot;)">Sat qualified &amp; beyond</button></div></div>'+
       '<p class="sub">'+(repSumTab==="pipeline"?"Sat qualified, proposals, closed won and closed lost from meetings sat in "+plabel:n+" unique compan"+(n===1?"y":"ies")+" booked in "+plabel+dupNote)+'</p>'+
       statusSplitHTML(repSumTab==="pipeline"?valueCohort.filter(r=>SUMMARY_STATUSES.includes(canon(r.status))):cohort)+'<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>Opp Value</th><th>Status</th></tr></thead><tbody>'+repSummaryRows(repSumTab==="pipeline"?valueCohort:cohort,repSumTab)+'</tbody></table></div></div>'+
-    '<div class="card-pad" style="margin-top:16px"><h3>Sat appointments breakdown</h3><p class="sub">'+(satList.length?satList.length+' meeting'+(satList.length===1?'':'s')+' sat in '+plabel+' \u00b7 '+sitCount+' sat-qualified \u00b7 excludes scheduled, cancelled and no-shows':'No meetings sat in '+plabel)+'</p>'+
+    '<div class="card-pad" style="margin-top:16px"><h3>Sat appointments breakdown</h3><p class="sub">'+(satList.length?satList.length+' meeting'+(satList.length===1?'':'s')+' sat in '+plabel+' \u00b7 '+satQualIcp+' sat qualified (ICP) \u00b7 '+satNonIcp+' non-ICP \u00b7 excludes scheduled, cancelled and no-shows':'No meetings sat in '+plabel)+'</p>'+
       '<div style="overflow-x:auto"><table class="rep-table"><thead><tr><th>Date sat</th><th>Company</th><th>Contact</th><th>BDM / Specialist</th><th>Booked By</th><th>Pillar</th><th>ICP</th><th>Opp Value</th><th>Outcome</th></tr></thead><tbody>'+satBreakdownRows(satList)+'</tbody></table></div></div>';
 }
 function exportReport(){
