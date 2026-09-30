@@ -499,6 +499,7 @@ let sb=null,SESSION=null,ME=null,BOOKINGS=[],O2O_ROWS=[],PROFILES=[],VIEW_USER="
 /* ---------- Icons ---------- */
 function svg(inner,s){return '<svg width="'+(s||12)+'" height="'+(s||12)+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+inner+'</svg>'}
 const PILLAR_ICON={
+  flowAI:'<path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5l2.6-1.5M17.2 9l2.6-1.5"/><circle cx="12" cy="12" r="3.2"/>',
   communications:'<path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.6 8.6 0 0 1-3.9-.9L3 21l1.9-5.6A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.4 8.4 0 0 1 21 11.5Z"/>',
   connectivity:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18"/>',
   itServices:'<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>',
@@ -540,7 +541,9 @@ const PILLARS={
   mobility:{label:"Mobility",tag:"Network Services",accent:"#EA580C",url:"https://cloudclevr.com/network-services/mobility/",
     fields:[{id:"info",label:"Details for the account manager",type:"textarea",ph:"Current vendor, contract end date, number of SIM cards, owned and leased devices..."}]},
   contactCentre:{label:"Contact Centre",tag:"Customer Contact",accent:"#16A34A",url:"https://cloudclevr.com/digital-workplace/contact-centre/",
-    fields:[{id:"info",label:"Details for the account manager",type:"textarea",ph:"Current vendor/platform, contract end, agents/seats, deployment, channels, inbound/outbound, monthly volume, AI/automation, analytics..."}]}
+    fields:[{id:"info",label:"Details for the account manager",type:"textarea",ph:"Current vendor/platform, contract end, agents/seats, deployment, channels, inbound/outbound, monthly volume, AI/automation, analytics..."}]},
+  flowAI:{label:"Flow AI",tag:"AI and Automation",accent:"#0EA5E9",
+    fields:[{id:"info",label:"Details for the account manager",type:"textarea",ph:"Where they want to use AI, current manual processes, volumes, systems to integrate with, any AI tools already in use..."}]}
 };
 const PILLAR_KEYS=Object.keys(PILLARS);
 const AM_LIST=[
@@ -549,6 +552,7 @@ const AM_LIST=[
   {name:"Alex Baddams",type:"Specialist",area:"Digital Workplace"},
   {name:"Ross Spacey",type:"Specialist",area:"IT and Cybersecurity"},
   {name:"Chantelle Smith",type:"Specialist",area:"Hardware"},
+  {name:"Flow AI",type:"Specialist",area:"AI and Automation"},
   {name:"Martin Ramsay",type:"BDM"},
   {name:"Dean Hudson",type:"BDM"},
   {name:"Jamie Sweeney",type:"BDM"},
