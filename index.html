@@ -661,6 +661,9 @@ function syncModalMode(){
   $("#sec1-title").textContent=ws?"Customer":"Prospect";
   $("#am-select-field").style.display=ws?"none":"";
   $("#am-text-field").style.display=ws?"":"none";
+  /* Whitespace bookings only capture the company name in section 1. */
+  ["website","contactName","jobTitle","phone","email"].forEach(id=>{const el=$("#"+id);if(!el)return;const f=el.closest(".field");if(f)f.style.display=ws?"none":"";if(ws)el.value=""});
+  const cn=$("#companyName").closest(".field");if(cn)cn.classList.toggle("full",ws);
   $("#icp-label").textContent=ws?"Whitespace":"ICP fit";
   $("#icp-text").textContent=ws?"This is a whitespace opportunity":"This prospect is ICP";
   /* Whitespace bookings are for existing customers, so only the company name is required. */
